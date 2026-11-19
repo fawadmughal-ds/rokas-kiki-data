@@ -73,7 +73,7 @@ code{font-family:var(--mono);font-size:12px}
   <header><h1>Kika store stock</h1><span class="sub" id="sub"></span></header>
   <div class="bar">
     <div class="seg" id="tabs" role="group" aria-label="Section">
-      <button data-v="overview" aria-pressed="true">Overview</button><button data-v="products" aria-pressed="false">Products</button><button data-v="stores" aria-pressed="false">Stores</button><button data-v="sales" aria-pressed="false">Sales estimate</button><button data-v="add" aria-pressed="false">Add data</button>
+      <button data-v="overview" aria-pressed="true">Overview</button><button data-v="products" aria-pressed="false">Products</button><button data-v="stores" aria-pressed="false">Stores</button><button data-v="sales" aria-pressed="false">Compare days</button><button data-v="add" aria-pressed="false">Add data</button>
     </div>
   </div>
   <div class="bar" id="filters">
@@ -207,13 +207,13 @@ function drawOverview(){const rows=filtered(),ok=rows.filter(r=>r.st!=null);stoc
   g.append(wide(card('Which stores carry the most stock, and of what?','Top 12 of '+D.NS+' locations by units, split by category. Click a store to list what it stocks.',storeStack(ok))));
   const all=D.rows.filter(r=>{const p=st.pet;st.pet=0;const m=match(r);st.pet=p;return m});
   g.append(card('How much do the dog and cat ranges overlap?','Variations listed under dogs only, under both, or under cats only.',split([['Dogs only',1,'--s1'],['Both',3,'--s3'],['Cats only',2,'--s2']].map(([label,b,color])=>({label,color,value:all.filter(r=>r.pet===b).length})))));
-  g.append(card('How is total stock changing day to day?','Units in stores for every day loaded (all products, filters not applied).',
-    META.snapshots.length>1?trend(META.snapshots):el('div','sub','Only one day is loaded. Add another day\'s CSV in the Add data tab to see the trend.')));
+  g.append(card('How is total stock changing day to day?','Units in stores for every full day loaded (all products, filters not applied).',
+    (full=>full.length>1?trend(full):el('div','sub','This needs at least two days that cover the full range. Days with only part of the range (such as a single category) are left out here; use the Compare days tab for those.'))(META.snapshots.filter(s=>s.variations>=.5*Math.max(...META.snapshots.map(t=>t.variations))))));
   const sb=el('div');g.append(card('What is selling best?','Estimated from the drop in store stock between two days.',sb));
   const idx=META.snapshots.findIndex(s=>s.date===st.date);
   if(idx<1)sb.append(el('div','sub','This needs at least two days of data. Add the next day\'s CSV in the Add data tab.'));
   else load(META.snapshots[idx-1].date).then(A=>{if(st.view!=='overview'||!sb.isConnected)return;const x=compare(A,D).filter(s=>match(s.r)&&s.sold>0).sort((a,b)=>b.sold-a.sold).slice(0,12);
-    sb.append(el('div','sub',A.date+' → '+D.date),rank(x.map(s=>({label:name(s.r),value:s.sold,tip:[s.r.brand,fmt(s.before)+' → '+fmt(s.after)+' units'],go:()=>pick(s.r)})),{color:'--s2',unit:'units sold (est.)',empty:'No drops in stock between these two days.'}));mount()});
+    const cmp=compare(A,D).filter(s=>match(s.r)).length;sb.append(el('div','sub',A.date+' → '+D.date+' · '+fmt(cmp)+' variations have data on both days'),rank(x.map(s=>({label:name(s.r),value:s.sold,tip:[s.r.brand,fmt(s.before)+' → '+fmt(s.after)+' units'],go:()=>pick(s.r)})),{color:'--s2',unit:'units sold (est.)',empty:'No drops in stock between these two days.'}));mount()});
   $('view').replaceChildren(g)}
 
 /* ---------- Products ---------- */
@@ -262,13 +262,16 @@ function compare(A,B){const out=[];B.rows.forEach(r=>{const a=A.byId.get(r.id);i
   for(let j=0;j<r.q.length;j+=2){const k=B.S[r.q[j]][0],was=m.get(k)||0,now=r.q[j+1];if(now<was)sold+=was-now;else up+=now-was;m.delete(k)}
   m.forEach(v=>sold+=v);out.push({r,sold,up,before:a.un,after:r.un,rev:sold*(r.price||0)})});return out}
 async function drawSales(){const v=$('view');
-  if(META.snapshots.length<2){tiles([]);note('');const c=el('div','card pad');c.append(el('h2','','Sales estimate needs two days of data'),el('div','sub','One stock snapshot shows where products are, not what sold. When a second day is added, this tab compares the two: every drop in a store\'s stock counts as estimated units sold. Add the next day\'s CSV in the Add data tab.'));v.replaceChildren(c);return}
+  if(META.snapshots.length<2){tiles([]);note('');const c=el('div','card pad');c.append(el('h2','','Comparing days needs two days of data'),el('div','sub','One stock snapshot shows where products are, not what sold. When a second day is added, this tab compares the two: every drop in a store\'s stock counts as estimated units sold. Add the next day\'s CSV in the Add data tab.'));v.replaceChildren(c);return}
   const ds=META.snapshots.map(s=>s.date);if(!ds.includes(st.to))st.to=ds[ds.length-1];if(!ds.includes(st.from)||st.from>=st.to)st.from=ds[Math.max(0,ds.indexOf(st.to)-1)];
   if(st.from===st.to)st.from=ds[0];
   const [A,B]=await Promise.all([load(st.from),load(st.to)]);if(st.view!=='sales')return;
   const x=compare(A,B).filter(s=>match(s.r)),sold=x.filter(s=>s.sold>0);
-  tiles([[fmt(x.reduce((a,s)=>a+s.sold,0)),'estimated units sold'],[eur(x.reduce((a,s)=>a+s.rev,0)),'estimated sales at shelf price'],[fmt(sold.length),'variations with sales'],[fmt(x.reduce((a,s)=>a+s.up,0)),'units added (restocks)'],[fmt(x.length),'variations compared']]);
-  note('This is an estimate. A drop in a store\'s stock between the two days is counted as sold; deliveries, transfers between stores and stock corrections can hide or inflate it. Variations missing on either day are left out.');
+  const sum=f=>x.reduce((a,s)=>a+f(s),0),ub=sum(s=>s.before),ua=sum(s=>s.after),vb=sum(s=>s.before*(s.r.price||0)),va=sum(s=>s.after*(s.r.price||0)),sg=n=>(n>0?'+':n<0?'−':'')+fmt(Math.abs(n));
+  tiles([[fmt(x.length),'variations on both days'],[fmt(ub)+' → '+fmt(ua),'units in stores ('+sg(ua-ub)+')'],[eur(vb)+' → '+eur(va),'stock value at shelf price ('+sg(va-vb)+' €)'],
+   [fmt(sum(s=>s.sold)),'units dropped (estimated sold)'],[eur(sum(s=>s.rev)),'estimated sales at shelf price'],[fmt(sum(s=>s.up)),'units added (deliveries, returns, transfers)'],[fmt(sold.length),'variations with drops'],[fmt(x.filter(s=>!s.sold&&!s.up).length),'variations unchanged']]);
+  const total=B.rows.filter(match).length;
+  note((x.length<total*.8?'Only '+fmt(x.length)+' of the '+fmt(total)+' variations on '+B.date+' also have data on '+A.date+', so this comparison covers that part of the range only. ':'')+'Sales are an estimate. A drop in a store\'s stock between the two days is counted as sold; deliveries, returns, transfers between stores and stock corrections can hide or inflate it.');
   const bar=el('div','bar'),f=el('select'),t=el('select');ds.forEach(d=>{f.add(new Option('From '+d,d));t.add(new Option('To '+d,d))});f.value=st.from;t.value=st.to;f.setAttribute('aria-label','From day');t.setAttribute('aria-label','To day');
   f.onchange=()=>{st.from=f.value;if(st.from>=st.to)st.to=ds[Math.min(ds.length-1,ds.indexOf(st.from)+1)];draw()};t.onchange=()=>{st.to=t.value;draw()};bar.append(f,t);
   const g=el('div','grid');
