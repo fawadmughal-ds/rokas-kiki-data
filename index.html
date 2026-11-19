@@ -1,0 +1,332 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Kika Store Stock</title>
+<style>
+/* Layout: tabs across the top; Overview answers each client question with one chart; Products and Stores are ranked tables; Sales compares two days; Add data explains the CSV and uploads it. */
+:root{--bg:#f5f7f6;--panel:#ffffff;--fg:#16211d;--muted:#5f6f69;--line:#dbe3df;--accent:#1f6f54;--accent-soft:#dcefe7;--bar:#2a78d6;--bar2:#eb6834;--warn:#a25b00;--warn-soft:#fbeed6;--bad:#b3392f;--bad-soft:#f8e1de;--zero:#9aa7a2;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#6250d6;--other:#8a9590;--font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
+@media (prefers-color-scheme:dark){:root{--bg:#101614;--panel:#18211e;--fg:#e6eeea;--muted:#93a39d;--line:#2a3833;--accent:#58c29d;--accent-soft:#1d3a30;--bar:#3987e5;--bar2:#d95926;--warn:#f0b866;--warn-soft:#3a2c12;--bad:#f08b80;--bad-soft:#3d1c18;--zero:#5d6b66;--s1:#3987e5;--s2:#d95926;--s3:#199e70;--s4:#c98500;--s5:#d55181;--s6:#0ca30c;--s7:#9085e9;--other:#6f7b76;color-scheme:dark}}
+*{box-sizing:border-box}[hidden]{display:none!important}
+body{margin:0;background:var(--bg);color:var(--fg);font:14px/1.45 var(--font)}
+.wrap{max-width:1500px;margin:0 auto;padding:20px 16px 48px;display:flex;flex-direction:column;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px 16px}
+h1{margin:0;font-size:22px;letter-spacing:-.01em}
+h2{margin:0;font-size:15px;text-wrap:balance}
+.sub{color:var(--muted)}
+.tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px}
+.tile{background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:12px 14px}
+.tile b{display:block;font-size:22px;font-variant-numeric:tabular-nums}
+.tile span{color:var(--muted);font-size:12px}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;flex-wrap:wrap;border:1px solid var(--line);border-radius:8px;overflow:hidden;background:var(--panel)}
+.seg button{border:0;background:none;color:var(--fg);padding:7px 14px;font:inherit;cursor:pointer}
+.seg button[aria-pressed=true]{background:var(--accent);color:var(--panel);font-weight:600}
+input[type=search],select{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:7px 10px;min-width:0;max-width:100%}
+input[type=search]{flex:1 1 220px}
+.btn{font:inherit;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:6px 12px;cursor:pointer}
+.btn.primary{background:var(--accent);color:var(--panel);border-color:var(--accent);font-weight:600}
+.btn:disabled{opacity:.4;cursor:default}
+button:focus-visible,input:focus-visible,select:focus-visible,tr:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:8px;min-width:0}
+.pad{padding:14px;display:flex;flex-direction:column;gap:10px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:16px;align-items:start}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:1000px){.main{grid-template-columns:minmax(0,1fr)}.side{position:static;max-height:none}}
+@media (max-width:600px){h1{font-size:19px}.seg{width:100%}.seg button{flex:1 1 auto;padding:8px 10px}.bar select{flex:1 1 140px}.tile b{font-size:18px}.pad{padding:12px}th,td{padding:6px 8px}.wrap{gap:12px}}
+.scroll{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-variant-numeric:tabular-nums}
+th,td{padding:7px 10px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-size:12px;color:var(--muted);font-weight:600;white-space:nowrap;background:var(--panel)}
+th.s{cursor:pointer}th.s:hover{color:var(--fg)}
+td.n,th.n{text-align:right;white-space:nowrap}
+tbody tr.click{cursor:pointer}tbody tr.click:hover{background:var(--accent-soft)}
+tr.sel{background:var(--accent-soft)}
+.t{font-weight:600}.v{color:var(--muted);font-size:12px}
+.cov{display:flex;align-items:center;gap:8px;min-width:130px}
+.cov i,.hb i{flex:1;height:8px;background:var(--line);border-radius:4px;overflow:hidden;display:block}
+.cov i u,.hb i u{display:block;height:100%;background:var(--bar)}
+.cov b{width:54px;text-align:right;font-weight:600}
+.pill{display:inline-block;font-size:11px;padding:1px 7px;border-radius:10px;background:var(--accent-soft);color:var(--accent);margin-right:3px}
+.pill.w{background:var(--warn-soft);color:var(--warn)}
+.z{color:var(--zero)}
+.foot{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px;padding:10px 12px;color:var(--muted)}
+.side{position:sticky;top:12px;max-height:calc(100vh - 24px);overflow:auto}
+.side a,.pad a{color:var(--accent)}
+.hb{display:grid;grid-template-columns:minmax(0,42%) minmax(0,1fr) auto;gap:8px;align-items:center;font-size:13px;padding:2px 0}
+.hb span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hb b{text-align:right;font-variant-numeric:tabular-nums;min-width:48px}
+.hb.alt i u{background:var(--bar2)}
+.note{background:var(--warn-soft);color:var(--warn);border-radius:8px;padding:9px 12px}
+.err{background:var(--bad-soft);color:var(--bad);border-radius:8px;padding:9px 12px}
+.ok{background:var(--accent-soft);color:var(--accent);border-radius:8px;padding:9px 12px}
+.wide{grid-column:1/-1}
+.empty{padding:28px;text-align:center;color:var(--muted)}
+pre{margin:0;font:12px/1.5 var(--mono);background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px;overflow-x:auto}
+code{font-family:var(--mono);font-size:12px}
+.drop{border:2px dashed var(--line);border-radius:8px;padding:18px;display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header><h1>Kika store stock</h1><span class="sub" id="sub"></span></header>
+  <div class="bar">
+    <div class="seg" id="tabs" role="group" aria-label="Section">
+      <button data-v="overview" aria-pressed="true">Overview</button><button data-v="products" aria-pressed="false">Products</button><button data-v="stores" aria-pressed="false">Stores</button><button data-v="sales" aria-pressed="false">Sales estimate</button><button data-v="add" aria-pressed="false">Add data</button>
+    </div>
+  </div>
+  <div class="bar" id="filters">
+    <select id="date" aria-label="Day"></select>
+    <div class="seg" id="pet" role="group" aria-label="Pet">
+      <button data-p="0" aria-pressed="true">All</button><button data-p="1" aria-pressed="false">Dogs</button><button data-p="2" aria-pressed="false">Cats</button>
+    </div>
+    <input type="search" id="q" placeholder="Search product, variation, brand or SKU" aria-label="Search">
+    <select id="cat" aria-label="Category"></select>
+    <select id="brand" aria-label="Brand"></select>
+    <select id="cover" aria-label="Store coverage">
+      <option value="">Any coverage</option><option value="50">In 50+ stores</option><option value="20">In 20+ stores</option><option value="1">In at least 1 store</option><option value="low">In 1–5 stores</option><option value="0">In no stores</option><option value="na">Not collected</option>
+    </select>
+  </div>
+  <div class="tiles" id="tiles"></div>
+  <div class="note" id="note" hidden></div>
+  <div id="view"></div>
+</div>
+<script src="echarts.min.js"></script>
+<script>
+const $=id=>document.getElementById(id),fmt=n=>n==null?'–':Math.round(n).toLocaleString('en-US'),eur=n=>'€'+fmt(n);
+const el=(tag,cls,text)=>{const e=document.createElement(tag);if(cls)e.className=cls;if(text!=null)e.textContent=text;return e};
+const PER=100,cache={};
+let META={snapshots:[],files:[],folder:''},D=null;
+const st={view:'overview',date:null,pet:0,q:'',cat:'',brand:'',cover:'',sort:'st',dir:-1,page:0,sel:null,ssort:'un',sdir:-1,store:null,from:null,to:null,xsort:'sold',msg:null};
+let STATIC=false;
+async function api(p,alt){if(!STATIC){try{const r=await fetch(p);if(r.ok&&(r.headers.get('content-type')||'').includes('json'))return r.json()}catch(e){}STATIC=true}const r=await fetch(alt);if(!r.ok)throw new Error('Request failed');return r.json()}
+function shape(d){const S=d.stores;const rows=d.rows.map((r,i)=>{const q=r[10];let n=null,un=null;if(q){n=q.length/2;un=0;for(let j=1;j<q.length;j+=2)un+=q[j]}
+  return {i,id:r[0],title:r[1],vr:r[2],brand:r[3],cat:r[4],sku:r[5],price:r[6],pet:r[7],buy:r[8],url:r[9],q,st:n,un,hay:(r[1]+' '+r[2]+' '+r[3]+' '+r[5]).toLowerCase()}});
+  return {date:d.date,S,NS:S.length,rows,byId:new Map(rows.map(r=>[r.id,r]))}}
+async function load(date){if(!cache[date])cache[date]=shape(await api('/api/data?date='+encodeURIComponent(date),'data/'+encodeURIComponent(date)+'.json'));return cache[date]}
+function fill(sel,label,vals,keep){sel.replaceChildren(new Option(label,''));vals.forEach(v=>sel.add(new Option(v,v)));sel.value=vals.includes(keep)?keep:''}
+function match(r){const q=st.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
+  return (!st.pet||(r.pet&st.pet))&&(!st.cat||r.cat===st.cat)&&(!st.brand||r.brand===st.brand)&&q.every(w=>r.hay.includes(w))&&
+   (st.cover===''||(st.cover==='na'?r.st==null:st.cover==='low'?r.st>=1&&r.st<=5:st.cover==='0'?r.st===0:r.st!=null&&r.st>=+st.cover))}
+const filtered=()=>D.rows.filter(r=>match(r)&&(st.store==null||(r.q&&unitsAt(r,st.store)>0)));
+function unitsAt(r,s){for(let j=0;j<r.q.length;j+=2)if(r.q[j]===s)return r.q[j+1];return 0}
+function tiles(list){const t=$('tiles');t.replaceChildren();list.forEach(([v,l])=>{const d=el('div','tile');d.append(el('b','',v),el('span','',l));t.append(d)})}
+function stockTiles(rows){const ok=rows.filter(r=>r.st!=null),miss=rows.length-ok.length;
+  tiles([[fmt(rows.length),'variations shown'],[fmt(ok.reduce((a,r)=>a+r.un,0)),'units in stores'],[eur(ok.reduce((a,r)=>a+(r.price||0)*r.un,0)),'stock value at shelf price'],
+   [fmt(ok.filter(r=>r.st>0).length),'stocked in at least 1 store'],[fmt(ok.filter(r=>r.st===0).length),'in no store'],
+   [ok.length?(ok.reduce((a,r)=>a+r.st,0)/ok.length).toFixed(1):'–','average stores per variation'],[fmt(ok.filter(r=>r.st===0&&r.buy===1).length),'online only (buyable, in no store)'],[fmt(miss),'not collected']]);
+  note(miss?miss+' of the variations shown have no stock numbers for this day: the site stopped answering before they were read. They are listed as "Not collected" and left out of the totals.':'')}
+function note(t){const n=$('note');n.hidden=!t;n.textContent=t}
+function hbars(items,o={}){const box=el('div'),mx=Math.max(1,...items.map(x=>x.value));
+  items.forEach(x=>{const d=el('div','hb'+(o.alt?' alt':'')),nm=el('span','',x.label);nm.title=x.title||x.label;const i=el('i'),u=el('u');u.style.width=(x.value/mx*100)+'%';i.append(u);d.append(nm,i,el('b','',(o.f||fmt)(x.value)+(x.suffix||'')));if(x.go){d.style.cursor='pointer';d.onclick=x.go}box.append(d)});
+  if(!items.length)box.append(el('div','sub',o.empty||'Nothing to show for these filters.'));return box}
+function card(q,sub,body){const c=el('div','card pad');c.append(el('h2','',q));if(sub)c.append(el('div','sub',sub));c.append(body);return c}
+function group(rows,key,val){const m=new Map();rows.forEach(r=>{const k=key(r),v=val(r);if(v)m.set(k,(m.get(k)||0)+v)});return [...m].map(([label,value])=>({label,value})).sort((a,b)=>b.value-a.value)}
+const name=r=>r.title+(r.vr?' — '+r.vr:'');
+function pick(r){st.sel=r.i;st.view='products';st.q=r.sku||r.title;$('q').value=st.q;st.page=0;sync();draw()}
+
+/* ---------- charts ---------- */
+const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
+const CATS=['Dry food','Wet food','Treats','Toys','Accessories','Supplies','Care products'],INK={'--s3':'#0b0b0b','--s4':'#0b0b0b','--s5':'#0b0b0b'};
+const catVar=c=>{const i=CATS.indexOf(c);return i<0?'--other':'--s'+(i+1)};
+const catList=rows=>{const have=new Set(rows.map(r=>r.cat));return [...CATS.filter(c=>have.has(c)),...[...have].filter(c=>!CATS.includes(c)).sort()]};
+let live=[],pending=[];
+function chart(h,opt,on){const d=el('div');d.style.cssText='width:100%;height:'+h+'px';pending.push([d,opt,on]);return d}
+function mount(){pending.forEach(([d,opt,on])=>{if(!d.isConnected||!window.echarts)return;const c=echarts.init(d);c.setOption(opt(d.clientWidth));if(on)c.on('click',on);live.push({c,d,opt})});pending=[]}
+let rz;window.addEventListener('resize',()=>{clearTimeout(rz);rz=setTimeout(()=>live.forEach(x=>{x.c.resize();x.c.setOption(x.opt(x.d.clientWidth))}),120)});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',()=>draw());
+function base(){const fg=css('--fg'),mu=css('--muted'),ln=css('--line'),panel=css('--panel');return {fg,mu,ln,panel,
+  ax:{axisLine:{lineStyle:{color:ln}},axisTick:{show:false},axisLabel:{color:mu,fontSize:11},splitLine:{lineStyle:{color:ln,type:'dashed'}},nameTextStyle:{color:mu,fontSize:11}},
+  o:{textStyle:{fontFamily:css('--font'),color:fg},animationDuration:300,tooltip:{backgroundColor:panel,borderColor:ln,textStyle:{color:fg,fontSize:12},extraCssText:'max-width:340px;white-space:normal;box-shadow:0 4px 14px rgba(0,0,0,.18)',confine:true}}}}
+const tip=(title,lines)=>'<b>'+esc(title)+'</b>'+lines.filter(Boolean).map(l=>'<br>'+esc(l)).join('');
+function rank(items,o={}){if(!items.length)return el('div','sub',o.empty||'Nothing to show for these filters.');const f=o.f||fmt;
+  return chart(items.length*28+12,w=>{const b=base(),lw=Math.min(o.lw||180,Math.round(w*.38));return {...b.o,grid:{left:lw+10,right:72,top:4,bottom:4},
+    tooltip:{...b.o.tooltip,trigger:'item',formatter:p=>{const x=items[p.dataIndex];return tip(x.title||x.label,[f(x.value)+(x.suffix||'')+(o.unit?' '+o.unit:''),...(x.tip||[])])}},
+    xAxis:{type:'value',...b.ax,axisLabel:{show:false},axisLine:{show:false}},
+    yAxis:{type:'category',inverse:true,data:items.map(x=>x.label),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:b.fg,width:lw,overflow:'truncate',fontSize:12}},
+    series:[{type:'bar',data:items.map(x=>x.value),barWidth:14,cursor:items.some(x=>x.go)?'pointer':'default',itemStyle:{color:css(o.color||'--s1'),borderRadius:[0,4,4,0]},emphasis:{itemStyle:{opacity:.75}},
+      label:{show:true,position:'right',color:b.fg,fontSize:12,formatter:p=>f(p.value)+(items[p.dataIndex].suffix||'')}}]}},p=>{const x=items[p.dataIndex];if(x&&x.go)x.go()})}
+const ptip=r=>[r.brand+' · '+r.cat,r.st+' of '+D.NS+' stores',fmt(r.un)+' units',r.price!=null&&'€'+r.price.toFixed(2)+' each'];
+function scatter(all){const ok=all.filter(r=>r.un>0);if(!ok.length)return el('div','sub','Nothing to show for these filters.');
+  return chart(360,()=>{const b=base();return {...b.o,grid:{left:8,right:20,top:16,bottom:34,containLabel:true},
+    tooltip:{...b.o.tooltip,trigger:'item',formatter:p=>{const r=ok[p.data[2]];return tip(name(r),ptip(r))}},
+    xAxis:{type:'value',name:'Stores with stock',nameLocation:'middle',nameGap:28,min:0,max:D.NS,...b.ax},yAxis:{type:'log',name:'Units in stores (each step is 10× more)',min:1,...b.ax,axisLine:{show:false},minorSplitLine:{show:false}},
+    series:[{type:'scatter',data:ok.map((r,i)=>[r.st,r.un,i]),symbolSize:7,cursor:'pointer',itemStyle:{color:css('--s1'),opacity:.4},emphasis:{itemStyle:{opacity:1,borderColor:b.panel,borderWidth:2}}}]}},p=>pick(ok[p.data[2]]))}
+function hist(ok){if(!ok.length)return el('div','sub','Nothing to show for these filters.');const bins=[{l:'0',n:0}];for(let a=1;a<=D.NS;a+=5)bins.push({l:a+'–'+Math.min(a+4,D.NS),n:0});
+  ok.forEach(r=>bins[r.st===0?0:Math.ceil(r.st/5)].n++);
+  return chart(280,()=>{const b=base();return {...b.o,grid:{left:8,right:12,top:28,bottom:30,containLabel:true},
+    tooltip:{...b.o.tooltip,trigger:'item',formatter:p=>tip(p.name==='0'?'In no store':'In '+p.name+' stores',[fmt(p.value)+' variations',(p.value/ok.length*100).toFixed(1)+'% of those shown'])},
+    xAxis:{type:'category',data:bins.map(x=>x.l),name:'Number of stores holding the variation',nameLocation:'middle',nameGap:bins.length>12?46:28,...b.ax,axisLabel:{color:b.mu,fontSize:10,interval:0,rotate:bins.length>12?45:0}},
+    yAxis:{type:'value',name:'Variations',...b.ax,axisLine:{show:false}},
+    series:[{type:'bar',data:bins.map(x=>x.n),barCategoryGap:'18%',itemStyle:{color:css('--s1'),borderRadius:[4,4,0,0]},emphasis:{itemStyle:{opacity:.75}}}]}})}
+function tree(ok){const m=new Map();ok.forEach(r=>{const v=r.un*(r.price||0);if(!v)return;const c=m.get(r.cat)||new Map();c.set(r.brand,(c.get(r.brand)||0)+v);m.set(r.cat,c)});
+  if(!m.size)return el('div','sub','No priced stock for these filters.');
+  return chart(420,()=>{const b=base();const data=catList(ok).filter(c=>m.has(c)).map(c=>{const col=css(catVar(c)),ink=INK[catVar(c)]||'#ffffff',kids=[...m.get(c)].sort((x,y)=>y[1]-x[1]),rest=kids.slice(8).reduce((a,x)=>a+x[1],0);
+      const ch=kids.slice(0,8).map(([n,v])=>({name:n,value:v,cat:c}));if(rest)ch.push({name:'Other brands',value:rest,cat:c});
+      return {name:c,value:ch.reduce((a,x)=>a+x.value,0),itemStyle:{borderColor:b.panel},children:ch.map(x=>({...x,itemStyle:{color:col},label:{color:ink}}))}});
+    return {...b.o,tooltip:{...b.o.tooltip,formatter:p=>tip(p.data.cat?p.data.cat+' · '+p.name:p.name,[eur(p.value)+' at shelf price'])},
+      series:[{type:'treemap',data,roam:false,nodeClick:false,breadcrumb:{show:false},left:0,right:0,top:0,bottom:0,
+        label:{show:true,formatter:p=>p.name+'\n'+eur(p.value),fontSize:11,lineHeight:15,overflow:'truncate'},
+        upperLabel:{show:true,height:22,color:b.fg,fontSize:12,fontWeight:600,formatter:p=>p.name+'  '+eur(p.value)},
+        levels:[{itemStyle:{borderWidth:0,gapWidth:6}},{itemStyle:{borderWidth:0,gapWidth:2,borderColor:b.panel}},{itemStyle:{borderWidth:0,gapWidth:2}}]}]}})}
+function storeStack(ok){const cats=catList(ok),agg=D.S.map((x,i)=>({i,name:x[0],tot:0,c:{}}));ok.forEach(r=>{for(let j=0;j<r.q.length;j+=2){const a=agg[r.q[j]];a.tot+=r.q[j+1];a.c[r.cat]=(a.c[r.cat]||0)+r.q[j+1]}});
+  const top=agg.filter(a=>a.tot).sort((a,b)=>b.tot-a.tot).slice(0,12);if(!top.length)return el('div','sub','Nothing to show for these filters.');
+  return chart(top.length*28+64,w=>{const b=base(),lw=Math.min(220,Math.round(w*.36));return {...b.o,legend:{top:0,left:0,type:'scroll',itemWidth:10,itemHeight:10,textStyle:{color:b.fg,fontSize:12}},grid:{left:lw+10,right:24,top:44,bottom:24},
+    tooltip:{...b.o.tooltip,trigger:'axis',axisPointer:{type:'shadow'},valueFormatter:v=>fmt(v)+' units'},
+    xAxis:{type:'value',...b.ax,axisLine:{show:false}},yAxis:{type:'category',inverse:true,data:top.map(a=>a.name),axisLine:{show:false},axisTick:{show:false},axisLabel:{color:b.fg,width:lw,overflow:'truncate',fontSize:12}},
+    series:cats.map(c=>({name:c,type:'bar',stack:'t',barWidth:16,cursor:'pointer',data:top.map(a=>a.c[c]||0),itemStyle:{color:css(catVar(c)),borderColor:b.panel,borderWidth:1}}))}},
+    p=>{const a=top[p.dataIndex];if(a){st.store=a.i;st.view='products';st.page=0;draw()}})}
+function split(parts){const tot=parts.reduce((a,x)=>a+x.value,0);if(!tot)return el('div','sub','Nothing to show for these filters.');
+  return chart(120,()=>{const b=base();return {...b.o,legend:{top:0,left:0,itemWidth:10,itemHeight:10,textStyle:{color:b.fg,fontSize:12}},grid:{left:4,right:4,top:40,bottom:4},
+    tooltip:{...b.o.tooltip,trigger:'item',formatter:p=>tip(p.seriesName,[fmt(p.value)+' variations',(p.value/tot*100).toFixed(1)+'% of the range'])},
+    xAxis:{type:'value',max:tot,show:false},yAxis:{type:'category',data:[''],show:false},
+    series:parts.map((x,i)=>({name:x.label,type:'bar',stack:'t',barWidth:44,data:[x.value],itemStyle:{color:css(x.color),borderColor:b.panel,borderWidth:1,borderRadius:i===0?[4,0,0,4]:i===parts.length-1?[0,4,4,0]:0},
+      label:{show:x.value/tot>.06,color:INK[x.color]||'#ffffff',fontWeight:600,formatter:p=>fmt(p.value)+'  ('+(p.value/tot*100).toFixed(0)+'%)'}}))}})}
+function trend(snaps){return chart(260,()=>{const b=base();return {...b.o,grid:{left:8,right:44,top:32,bottom:8,containLabel:true},
+    tooltip:{...b.o.tooltip,trigger:'axis',valueFormatter:v=>fmt(v)+' units'},
+    xAxis:{type:'category',data:snaps.map(s=>s.date),boundaryGap:true,...b.ax},yAxis:{type:'value',scale:true,...b.ax,axisLine:{show:false}},
+    series:[{name:'Units in stores',type:'line',data:snaps.map(s=>s.units),lineStyle:{width:2,color:css('--s1')},itemStyle:{color:css('--s1')},symbol:'circle',symbolSize:8,areaStyle:{color:css('--s1'),opacity:.08},
+      label:{show:snaps.length<=8,position:'top',color:b.fg,fontSize:11,formatter:p=>fmt(p.value)}}]}})}
+
+/* ---------- Overview ---------- */
+function drawOverview(){const rows=filtered(),ok=rows.filter(r=>r.st!=null);stockTiles(rows);const g=el('div','grid');
+  const wide=c=>{c.classList.add('wide');return c};
+  g.append(wide(card('Wide coverage or deep stock?','Each dot is one variation: further right means it is in more stores, higher means more units in total. Variations with no stock are left out. Hover a dot for details, click it to open the product.',scatter(ok))));
+  g.append(card('Which variations are in the most stores?','Stores holding at least 1 unit, out of '+D.NS+'.',
+    rank([...ok].sort((a,b)=>b.st-a.st||b.un-a.un).slice(0,12).map(r=>({label:name(r),value:r.st,suffix:' / '+D.NS,tip:ptip(r),go:()=>pick(r)})))));
+  g.append(card('Which variations have the most units in stock?','Total units across all stores.',
+    rank([...ok].sort((a,b)=>b.un-a.un).slice(0,12).map(r=>({label:name(r),value:r.un,tip:ptip(r),go:()=>pick(r)})),{unit:'units'})));
+  g.append(card('How widely is the range distributed?','How many variations sit in 0 stores, 1–5 stores, and so on.',hist(ok)));
+  g.append(card('Which categories hold the most stock?','Units in stores by category.',rank(group(ok,r=>r.cat,r=>r.un),{unit:'units',lw:110})));
+  const bs=new Map();ok.forEach(r=>{const b=bs.get(r.brand)||{un:0,n:0,st:0};b.un+=r.un;b.n++;b.st+=r.st;bs.set(r.brand,b)});
+  g.append(card('Which brands hold the most stock?','Top 12 brands by units. Click a bar to list that brand.',
+    rank([...bs].sort((a,b)=>b[1].un-a[1].un).slice(0,12).map(([k,b])=>({label:k,value:b.un,tip:[fmt(b.n)+' variations','in '+(b.st/b.n).toFixed(0)+' stores on average'],go:()=>{st.brand=k;$('brand').value=k;st.view='products';draw()}})),{unit:'units',lw:170})));
+  g.append(wide(card('Where is the money sitting?','Stock value at shelf price (units × price). Each block is a brand inside its category; a bigger block means more money on the shelves.',tree(ok))));
+  g.append(wide(card('Which stores carry the most stock, and of what?','Top 12 of '+D.NS+' locations by units, split by category. Click a store to list what it stocks.',storeStack(ok))));
+  const all=D.rows.filter(r=>{const p=st.pet;st.pet=0;const m=match(r);st.pet=p;return m});
+  g.append(card('How much do the dog and cat ranges overlap?','Variations listed under dogs only, under both, or under cats only.',split([['Dogs only',1,'--s1'],['Both',3,'--s3'],['Cats only',2,'--s2']].map(([label,b,color])=>({label,color,value:all.filter(r=>r.pet===b).length})))));
+  g.append(card('How is total stock changing day to day?','Units in stores for every day loaded (all products, filters not applied).',
+    META.snapshots.length>1?trend(META.snapshots):el('div','sub','Only one day is loaded. Add another day\'s CSV in the Add data tab to see the trend.')));
+  const sb=el('div');g.append(card('What is selling best?','Estimated from the drop in store stock between two days.',sb));
+  const idx=META.snapshots.findIndex(s=>s.date===st.date);
+  if(idx<1)sb.append(el('div','sub','This needs at least two days of data. Add the next day\'s CSV in the Add data tab.'));
+  else load(META.snapshots[idx-1].date).then(A=>{if(st.view!=='overview'||!sb.isConnected)return;const x=compare(A,D).filter(s=>match(s.r)&&s.sold>0).sort((a,b)=>b.sold-a.sold).slice(0,12);
+    sb.append(el('div','sub',A.date+' → '+D.date),rank(x.map(s=>({label:name(s.r),value:s.sold,tip:[s.r.brand,fmt(s.before)+' → '+fmt(s.after)+' units'],go:()=>pick(s.r)})),{color:'--s2',unit:'units sold (est.)',empty:'No drops in stock between these two days.'}));mount()});
+  $('view').replaceChildren(g)}
+
+/* ---------- Products ---------- */
+const COLS=[['title','Product',0],['brand','Brand',0],['cat','Category',0],['price','Price €',1],['st','Stores with stock',1],['un','Units',1]];
+function head(cols,cur,dir,on,extra){const h=el('tr');h.append(el('th','n','#'));cols.forEach(c=>{const th=el('th','s'+(c[2]?' n':''),c[1]+(cur===c[0]?(dir<0?' ▼':' ▲'):''));th.tabIndex=0;th.onclick=()=>on(c);h.append(th)});(extra||[]).forEach(x=>h.append(el('th','n',x)));const t=el('thead');t.append(h);return t}
+function prodCell(r){const td=el('td');td.append(el('div','t',r.title));const v=el('div','v');if(r.pet&1)v.append(el('span','pill','Dog'));if(r.pet&2)v.append(el('span','pill','Cat'));if(r.buy===0)v.append(el('span','pill w','Not buyable online'));v.append(document.createTextNode([r.vr,r.sku&&'SKU '+r.sku].filter(Boolean).join(' · ')));td.append(v);return td}
+function drawProducts(){const rows=filtered();stockTiles(rows);
+  const k=st.sort,d=st.dir;rows.sort((a,b)=>{const x=a[k],y=b[k];if((x==null)!==(y==null))return x==null?1:-1;return (typeof x==='string'?x.localeCompare(y):x-y)*d||b.un-a.un||a.i-b.i});
+  const pages=Math.max(1,Math.ceil(rows.length/PER));st.page=Math.max(0,Math.min(st.page,pages-1));
+  const tb=el('table'),b=el('tbody');tb.append(head(COLS,st.sort,st.dir,c=>{st.dir=st.sort===c[0]?-st.dir:(c[2]?-1:1);st.sort=c[0];st.page=0;draw()},st.store!=null?['Units here']:[]),b);
+  rows.slice(st.page*PER,st.page*PER+PER).forEach((r,n)=>{const tr=el('tr','click'+(st.sel===r.i?' sel':''));tr.tabIndex=0;
+    const cv=el('td','n');if(r.st==null)cv.append(el('span','pill w','Not collected'));else{const c=el('div','cov'),i=el('i'),u=el('u');u.style.width=(r.st/D.NS*100)+'%';i.append(u);c.append(i,el('b',r.st?'':'z',r.st+' / '+D.NS));cv.append(c)}
+    tr.append(el('td','n z',st.page*PER+n+1),prodCell(r),el('td','',r.brand),el('td','',r.cat),el('td','n',r.price==null?'–':r.price.toFixed(2)),cv,el('td','n'+(r.un?'':' z'),fmt(r.un)));
+    if(st.store!=null)tr.append(el('td','n',fmt(unitsAt(r,st.store))));
+    const go=()=>{st.sel=r.i;draw()};tr.onclick=go;tr.onkeydown=e=>{if(e.key==='Enter')go()};b.append(tr)});
+  if(!rows.length){const tr=el('tr'),td=el('td','empty','No variations match these filters.');td.colSpan=9;tr.append(td);b.append(tr)}
+  const sc=el('div','scroll');sc.append(tb);const ft=el('div','foot'),pg=el('span'),pv=el('button','btn','Previous'),nx=el('button','btn','Next');
+  pv.disabled=st.page<=0;nx.disabled=st.page>=pages-1;pv.onclick=()=>{st.page--;draw()};nx.onclick=()=>{st.page++;draw()};pg.append(pv,' Page '+(st.page+1)+' of '+pages+' ',nx);
+  ft.append(el('span','',fmt(rows.length)+' variations'+(st.store!=null?' stocked at '+D.S[st.store][0]:'')),pg);
+  const c=el('div','card');c.append(sc,ft);const m=el('div','main');m.append(c,side());$('view').replaceChildren(m)}
+function side(){const s=el('aside','card pad side');
+  if(st.store!=null){const b=el('button','btn','Show all stores');b.onclick=()=>{st.store=null;st.page=0;draw()};s.append(el('h2','','Filtered to one store'),el('div','sub',D.S[st.store][0]+' — '+D.S[st.store][1]),b)}
+  const r=st.sel==null?null:D.rows[st.sel];
+  if(!r){s.append(el('h2','','Stock by store'),el('div','sub','Select a row to see how many units each store holds.'));return s}
+  s.append(el('h2','',r.title),el('div','sub',[r.vr,r.brand,r.sku&&'SKU '+r.sku,r.price!=null&&'€'+r.price.toFixed(2)].filter(Boolean).join(' · ')));
+  if(/^https:\/\//.test(r.url)){const a=el('a','','Open on kika.lt');a.href=r.url;a.target='_blank';a.rel='noopener';s.append(a)}
+  if(!r.q){s.append(el('div','note','Stock was not collected for this variation on this day.'));return s}
+  s.append(el('div','',r.st+' of '+D.NS+' stores · '+fmt(r.un)+' units'));
+  const p=[];for(let j=0;j<r.q.length;j+=2)p.push({label:D.S[r.q[j]][0],title:D.S[r.q[j]][0]+' — '+D.S[r.q[j]][1],value:r.q[j+1]});p.sort((x,y)=>y.value-x.value);
+  s.append(hbars(p,{empty:'No store holds this variation.'}));return s}
+
+/* ---------- Stores ---------- */
+function drawStores(){const rows=filtered(),agg=D.S.map((x,i)=>({i,name:x[0],addr:x[1],vars:0,un:0,val:0}));stockTiles(rows);
+  rows.forEach(r=>{if(r.q)for(let j=0;j<r.q.length;j+=2){const a=agg[r.q[j]];a.vars++;a.un+=r.q[j+1];a.val+=r.q[j+1]*(r.price||0)}});
+  const k=st.ssort,d=st.sdir;agg.sort((a,b)=>(typeof a[k]==='string'?a[k].localeCompare(b[k]):a[k]-b[k])*d);
+  const tb=el('table'),b=el('tbody');tb.append(head([['name','Store',0],['addr','Address',0],['vars','Variations in stock',1],['un','Units',1],['val','Stock value €',1]],st.ssort,st.sdir,c=>{st.sdir=st.ssort===c[0]?-st.sdir:(c[2]?-1:1);st.ssort=c[0];draw()}),b);
+  const mx=Math.max(1,...agg.map(a=>a.vars));
+  agg.forEach((a,n)=>{const tr=el('tr','click');tr.tabIndex=0;const cv=el('td','n'),c=el('div','cov'),i=el('i'),u=el('u');u.style.width=(a.vars/mx*100)+'%';i.append(u);c.append(i,el('b','',fmt(a.vars)));cv.append(c);
+    const t=el('td');t.append(el('div','t',a.name));tr.append(el('td','n z',n+1),t,el('td','v',a.addr),cv,el('td','n',fmt(a.un)),el('td','n',fmt(a.val)));
+    const go=()=>{st.store=a.i;st.view='products';st.page=0;sync();draw()};tr.onclick=go;tr.onkeydown=e=>{if(e.key==='Enter')go()};b.append(tr)});
+  const sc=el('div','scroll');sc.append(tb);const c=el('div','card');c.append(sc,Object.assign(el('div','foot'),{textContent:D.NS+' locations · counts follow the filters above · select a store to list what it stocks'}));$('view').replaceChildren(c)}
+
+/* ---------- Sales estimate ---------- */
+function compare(A,B){const out=[];B.rows.forEach(r=>{const a=A.byId.get(r.id);if(!a||!a.q||!r.q)return;const m=new Map();
+  for(let j=0;j<a.q.length;j+=2)m.set(A.S[a.q[j]][0],a.q[j+1]);let sold=0,up=0;
+  for(let j=0;j<r.q.length;j+=2){const k=B.S[r.q[j]][0],was=m.get(k)||0,now=r.q[j+1];if(now<was)sold+=was-now;else up+=now-was;m.delete(k)}
+  m.forEach(v=>sold+=v);out.push({r,sold,up,before:a.un,after:r.un,rev:sold*(r.price||0)})});return out}
+async function drawSales(){const v=$('view');
+  if(META.snapshots.length<2){tiles([]);note('');const c=el('div','card pad');c.append(el('h2','','Sales estimate needs two days of data'),el('div','sub','One stock snapshot shows where products are, not what sold. When a second day is added, this tab compares the two: every drop in a store\'s stock counts as estimated units sold. Add the next day\'s CSV in the Add data tab.'));v.replaceChildren(c);return}
+  const ds=META.snapshots.map(s=>s.date);if(!ds.includes(st.to))st.to=ds[ds.length-1];if(!ds.includes(st.from)||st.from>=st.to)st.from=ds[Math.max(0,ds.indexOf(st.to)-1)];
+  if(st.from===st.to)st.from=ds[0];
+  const [A,B]=await Promise.all([load(st.from),load(st.to)]);if(st.view!=='sales')return;
+  const x=compare(A,B).filter(s=>match(s.r)),sold=x.filter(s=>s.sold>0);
+  tiles([[fmt(x.reduce((a,s)=>a+s.sold,0)),'estimated units sold'],[eur(x.reduce((a,s)=>a+s.rev,0)),'estimated sales at shelf price'],[fmt(sold.length),'variations with sales'],[fmt(x.reduce((a,s)=>a+s.up,0)),'units added (restocks)'],[fmt(x.length),'variations compared']]);
+  note('This is an estimate. A drop in a store\'s stock between the two days is counted as sold; deliveries, transfers between stores and stock corrections can hide or inflate it. Variations missing on either day are left out.');
+  const bar=el('div','bar'),f=el('select'),t=el('select');ds.forEach(d=>{f.add(new Option('From '+d,d));t.add(new Option('To '+d,d))});f.value=st.from;t.value=st.to;f.setAttribute('aria-label','From day');t.setAttribute('aria-label','To day');
+  f.onchange=()=>{st.from=f.value;if(st.from>=st.to)st.to=ds[Math.min(ds.length-1,ds.indexOf(st.from)+1)];draw()};t.onchange=()=>{st.to=t.value;draw()};bar.append(f,t);
+  const g=el('div','grid');
+  const stip=x=>[x.r.brand,fmt(x.before)+' → '+fmt(x.after)+' units',x.up?fmt(x.up)+' restocked':''];
+  g.append(card('What is selling best?','Top 12 variations by estimated units sold. Click a bar to open the product.',rank([...sold].sort((a,b)=>b.sold-a.sold).slice(0,12).map(s=>({label:name(s.r),value:s.sold,tip:stip(s),go:()=>pick(s.r)})),{color:'--s2',unit:'units sold (est.)',empty:'No drops in stock between these two days.'})));
+  g.append(card('What brings in the most money?','Top 12 variations by estimated sales at shelf price.',rank([...sold].sort((a,b)=>b.rev-a.rev).slice(0,12).map(s=>({label:name(s.r),value:s.rev,tip:stip(s),go:()=>pick(s.r)})),{color:'--s2',f:eur})));
+  g.append(card('Which categories sell the most?','Estimated units sold by category.',rank(group(sold,s=>s.r.cat,s=>s.sold),{color:'--s2',unit:'units sold (est.)',lw:110})));
+  g.append(card('Which brands sell the most?','Top 12 brands by estimated units sold.',rank(group(sold,s=>s.r.brand,s=>s.sold).slice(0,12),{color:'--s2',unit:'units sold (est.)',lw:170})));
+  const k=st.xsort;x.sort((a,b)=>b[k]-a[k]||b.sold-a.sold);
+  const tb=el('table'),b=el('tbody'),h=el('tr');[['#',1],['Product',0],['Brand',0],['Units before',1,'before'],['Units after',1,'after'],['Est. sold',1,'sold'],['Restocked',1,'up'],['Est. sales €',1,'rev']].forEach(c=>{const th=el('th',(c[1]?'n':'')+(c[2]?' s':''),c[0]+(c[2]===k?' ▼':''));if(c[2])th.onclick=()=>{st.xsort=c[2];draw()};h.append(th)});
+  const th=el('thead');th.append(h);tb.append(th,b);
+  x.slice(0,200).forEach((s,n)=>{const tr=el('tr');tr.append(el('td','n z',n+1),prodCell(s.r),el('td','',s.r.brand),el('td','n',fmt(s.before)),el('td','n',fmt(s.after)),el('td','n t',fmt(s.sold)),el('td','n',fmt(s.up)),el('td','n',fmt(s.rev)));b.append(tr)});
+  const sc=el('div','scroll');sc.append(tb);const c=el('div','card');c.append(sc,Object.assign(el('div','foot'),{textContent:'Showing the top '+Math.min(200,x.length)+' of '+fmt(x.length)+' variations compared'}));
+  const w=el('div');w.style.cssText='display:flex;flex-direction:column;gap:16px';w.append(bar,g,c);v.replaceChildren(w);mount()}
+
+/* ---------- Add data ---------- */
+const FORMAT=[['date','Required','Day of the stock count, as YYYY-MM-DD.','2026-11-20'],['product','Required','Product name.','Tauro Pro Line bowl for water'],['variant_id','Required','Unique ID of the variation. It links the same variation across days.','45257197387945'],['store','Required column','Store name. One row per store that holds the variation. Leave blank when no store holds it.','KIKA Akropolis Vilnius'],['units_in_stock','Required column','Units in that store, as a whole number. 0 with a blank store means "in no store". Blank means "not collected".','4'],
+ ['pet','Optional','dog, cat or dog+cat.','dog'],['variation','Optional','Size, colour or other variation name.','grey, 2 l'],['brand','Optional','Brand name.','Tauro Pro Line'],['category','Optional','Product category.','Supplies'],['sku','Optional','Product code.','TPL47216'],['price','Optional','Shelf price in euros. Needed for stock value and sales value.','12.99'],['buyable_online','Optional','yes or no.','yes'],['url','Optional','Link to the product page.','https://www.kika.lt/products/…'],['store_address','Optional','Store address.','Ozo g. 25, Vilnius']];
+function drawAdd(){tiles([]);note('');const w=el('div','grid');
+  const up=el('div','card pad');up.append(el('h2','','Add a day of data'),el('div','sub','Choose the CSV file for one day. It is checked against the format, saved in the dashboard\'s uploads folder, and the charts update straight away. A file with the same name replaces the earlier one.'));
+  if(STATIC){up.replaceChildren(el('h2','','Add a day of data'),el('div','note','This hosted copy is read-only, so files cannot be uploaded here. To add a day: put the CSV in the uploads folder of the project, run "python3 build_static.py", and push to GitHub. The site updates by itself a minute later. Uploading from this page works when the dashboard is run with "python3 server.py".'))}
+  const dr=el('div','drop'),inp=el('input'),bt=el('button','btn primary','Upload and save');inp.type='file';inp.accept='.csv,text/csv';inp.id='file';inp.setAttribute('aria-label','CSV file');dr.append(inp,bt);if(!STATIC)up.append(dr);
+  const msg=el('div');up.append(msg);if(st.msg){msg.className=st.msg.ok?'ok':'err';msg.append(el('div','t',st.msg.text));(st.msg.details||[]).forEach(d=>msg.append(el('div','',d)))}
+  bt.onclick=async()=>{const f=inp.files[0];if(!f){st.msg={ok:0,text:'Choose a CSV file first.'};return draw()}bt.disabled=true;bt.textContent='Uploading…';
+    try{const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f}),j=await r.json();
+      if(!r.ok)st.msg={ok:0,text:j.error,details:j.details};else{st.msg={ok:1,text:(j.replaced?'Replaced ':'Saved ')+j.saved+': '+fmt(j.rows)+' rows, '+fmt(j.variations)+' variations, day '+j.dates.join(', ')+'.'};Object.keys(cache).forEach(k=>delete cache[k]);await refresh(j.dates[j.dates.length-1])}}
+    catch(e){st.msg={ok:0,text:'The upload did not reach the dashboard. Check that it is still running, then try again.'}}draw()};
+  up.append(el('h2','','Files loaded'));const tb=el('table'),b=el('tbody'),h=el('tr');['File','Day','Rows','Size'].forEach((x,i)=>h.append(el('th',i>1?'n':'',x)));const th=el('thead');th.append(h);tb.append(th,b);
+  META.files.forEach(f=>{const tr=el('tr');tr.append(el('td','',f.name),el('td','',f.dates.join(', ')||'no valid rows'),el('td','n',fmt(f.rows)),el('td','n',(f.size/1e6).toFixed(1)+' MB'));b.append(tr)});
+  if(!META.files.length){const tr=el('tr'),td=el('td','empty','No files yet. Upload the first CSV above.');td.colSpan=4;tr.append(td);b.append(tr)}
+  const sc=el('div','scroll');sc.append(tb);up.append(sc,el('div','sub','Saved in: '+META.folder));
+  const fm=el('div','card pad');fm.append(el('h2','','CSV format'),el('div','sub','The first line holds the column names. Each following line is one variation in one store. Columns can be in any order; extra columns are ignored. Save the file as UTF-8 with commas as separators.'));
+  const ft=el('table'),fb=el('tbody'),fh=el('tr');['Column','','What it holds','Example'].forEach(x=>fh.append(el('th','',x)));const fth=el('thead');fth.append(fh);ft.append(fth,fb);
+  FORMAT.forEach(r=>{const tr=el('tr'),c=el('td');c.append(el('code','',r[0]));const p=el('td');p.append(el('span','pill'+(r[1]==='Optional'?' w':''),r[1]));tr.append(c,p,el('td','',r[2]),el('td','v',r[3]));fb.append(tr)});
+  const fs=el('div','scroll');fs.append(ft);fm.append(fs,el('h2','','Example file'),el('div','sub','Example values, to show the layout: a variation in two stores, one in no store, and one that was not collected.'));
+  const pre=el('pre');fm.append(pre);fetch('sample.csv').then(r=>r.text()).then(t=>pre.textContent=t);
+  const a=el('a','','Download this example as a CSV file');a.href='sample.csv';a.setAttribute('download','kika_sample.csv');fm.append(a);
+  w.append(up,fm);$('view').replaceChildren(w)}
+
+/* ---------- shell ---------- */
+function sync(){document.querySelectorAll('#tabs button').forEach(b=>b.setAttribute('aria-pressed',b.dataset.v===st.view));document.querySelectorAll('#pet button').forEach(b=>b.setAttribute('aria-pressed',+b.dataset.p===st.pet));
+  $('filters').hidden=st.view==='add';$('date').hidden=st.view==='sales';$('cover').hidden=st.view==='sales'}
+function draw(){live.forEach(x=>x.c.dispose());live=[];pending=[];sync();if(st.view==='add')return drawAdd();
+  if(!D){tiles([]);note('');const c=el('div','card pad');c.append(el('h2','','No data yet'),el('div','sub','Open the Add data tab to see the CSV format and upload the first file.'));return $('view').replaceChildren(c)}
+  ({overview:drawOverview,products:drawProducts,stores:drawStores,sales:drawSales})[st.view]();mount()}
+async function setDate(d){st.date=d;D=await load(d);st.sel=null;st.store=null;st.page=0;
+  fill($('cat'),'All categories',[...new Set(D.rows.map(r=>r.cat))].sort(),st.cat);st.cat=$('cat').value;
+  fill($('brand'),'All brands',[...new Set(D.rows.map(r=>r.brand))].sort((a,b)=>a.localeCompare(b)),st.brand);st.brand=$('brand').value;
+  $('sub').textContent='Snapshot of '+d+' · '+D.NS+' locations · '+META.snapshots.length+' day'+(META.snapshots.length===1?'':'s')+' loaded'}
+async function refresh(want){META=await api('/api/snapshots','data/snapshots.json');const ds=META.snapshots.map(s=>s.date),sel=$('date');sel.replaceChildren();ds.forEach(d=>sel.add(new Option('Day: '+d,d)));
+  if(!ds.length){D=null;$('sub').textContent='No data loaded';return}const d=ds.includes(want)?want:ds[ds.length-1];sel.value=d;await setDate(d)}
+$('tabs').onclick=e=>{const b=e.target.closest('button');if(b){st.view=b.dataset.v;st.msg=null;draw()}};
+$('pet').onclick=e=>{const b=e.target.closest('button');if(b){st.pet=+b.dataset.p;st.page=0;draw()}};
+$('date').onchange=async e=>{await setDate(e.target.value);draw()};
+let tm;$('q').oninput=e=>{clearTimeout(tm);tm=setTimeout(()=>{st.q=e.target.value;st.page=0;draw()},150)};
+['cat','brand','cover'].forEach(k=>$(k).onchange=e=>{st[k]=e.target.value;st.page=0;draw()});
+if(['overview','products','stores','sales','add'].includes(location.hash.slice(1)))st.view=location.hash.slice(1);
+refresh().then(draw).catch(()=>{$('view').replaceChildren(el('div','err','The dashboard could not load its data. Start it with "python3 server.py" and open http://localhost:8765.'))});
+</script>
+</body>
+</html>

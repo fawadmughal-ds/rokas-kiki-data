@@ -1,0 +1,5 @@
+date,pet,product,variation,brand,category,sku,variant_id,price,buyable_online,url,store,store_address,units_in_stock
+2026-11-20,dog,Tauro Pro Line bowl for water,"grey, 2 l",Tauro Pro Line,Supplies,TPL47216,45257197387945,12.99,yes,https://www.kika.lt/products/tauro-pro-line-bowl-for-water-grey,KIKA Akropolis Vilnius,"Ozo g. 25, Vilnius",4
+2026-11-20,dog,Tauro Pro Line bowl for water,"grey, 2 l",Tauro Pro Line,Supplies,TPL47216,45257197387945,12.99,yes,https://www.kika.lt/products/tauro-pro-line-bowl-for-water-grey,KIKA Mega Kaunas,"Islandijos pl. 32, Kaunas",2
+2026-11-20,dog+cat,Silicone travel bowl,,Pet Advance,Supplies,PA10021,45257121628329,3.99,yes,,,,0
+2026-11-20,cat,Cat scratching post,90 cm,Kika,Supplies,KK55310,45258181968041,39.99,no,,,,
