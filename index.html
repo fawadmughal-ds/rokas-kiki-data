@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Kika Store Stock</title>
+<title>Pet Store Stock</title>
 <style>
 /* Layout: tabs across the top; Overview answers each client question with one chart; Products and Stores are ranked tables; Sales compares two days; Add data explains the CSV and uploads it. */
 :root{--bg:#f5f7f6;--panel:#ffffff;--fg:#16211d;--muted:#5f6f69;--line:#dbe3df;--accent:#1f6f54;--accent-soft:#dcefe7;--bar:#2a78d6;--bar2:#eb6834;--warn:#a25b00;--warn-soft:#fbeed6;--bad:#b3392f;--bad-soft:#f8e1de;--zero:#9aa7a2;--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--s4:#eda100;--s5:#e87ba4;--s6:#008300;--s7:#6250d6;--other:#8a9590;--font:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;--mono:ui-monospace,Menlo,Consolas,monospace}
@@ -70,7 +70,8 @@ code{font-family:var(--mono);font-size:12px}
 </head>
 <body>
 <div class="wrap">
-  <header><h1>Kika store stock</h1><span class="sub" id="sub"></span></header>
+  <header><h1 id="h1">Store stock</h1><span class="sub" id="sub"></span></header>
+  <div class="bar"><div class="seg" id="site" role="group" aria-label="Retailer"></div></div>
   <div class="bar">
     <div class="seg" id="tabs" role="group" aria-label="Section">
       <button data-v="overview" aria-pressed="true">Overview</button><button data-v="products" aria-pressed="false">Products</button><button data-v="stores" aria-pressed="false">Stores</button><button data-v="sales" aria-pressed="false">Compare days</button><button data-v="add" aria-pressed="false">Add data</button>
@@ -100,11 +101,14 @@ const PER=100,cache={};
 let META={snapshots:[],files:[],folder:''},D=null;
 const st={view:'overview',date:null,pet:0,q:'',cat:'',brand:'',cover:'',sort:'st',dir:-1,page:0,sel:null,ssort:'un',sdir:-1,store:null,from:null,to:null,xsort:'sold',msg:null};
 let STATIC=false;
+const SITES={kika:{name:'Kika',where:'Lithuania',host:'kika.lt',pets:true,cats:['Dry food','Wet food','Treats','Toys','Accessories','Supplies','Care products']},
+  fressnapf:{name:'Fressnapf',where:'Germany',host:'fressnapf.de',pets:false,cats:['Futternäpfe','Futterautomaten','Reisenäpfe','Trinkbrunnen','Futteraufbewahrung','Trinkflaschen','Intelligenzspielzeug']}};
+const SITE=(k=>SITES[k]?k:'kika')(new URLSearchParams(location.search).get('site')),SC=SITES[SITE];
 async function api(p,alt){if(!STATIC){try{const r=await fetch(p);if(r.ok&&(r.headers.get('content-type')||'').includes('json'))return r.json()}catch(e){}STATIC=true}const r=await fetch(alt);if(!r.ok)throw new Error('Request failed');return r.json()}
 function shape(d){const S=d.stores;const rows=d.rows.map((r,i)=>{const q=r[10];let n=null,un=null;if(q){n=q.length/2;un=0;for(let j=1;j<q.length;j+=2)un+=q[j]}
   return {i,id:r[0],title:r[1],vr:r[2],brand:r[3],cat:r[4],sku:r[5],price:r[6],pet:r[7],buy:r[8],url:r[9],q,st:n,un,hay:(r[1]+' '+r[2]+' '+r[3]+' '+r[5]).toLowerCase()}});
   return {date:d.date,S,NS:S.length,rows,byId:new Map(rows.map(r=>[r.id,r]))}}
-async function load(date){if(!cache[date])cache[date]=shape(await api('/api/data?date='+encodeURIComponent(date),'data/'+encodeURIComponent(date)+'.json'));return cache[date]}
+async function load(date){if(!cache[date])cache[date]=shape(await api('/api/data?site='+SITE+'&date='+encodeURIComponent(date),'data/'+SITE+'/'+encodeURIComponent(date)+'.json'));return cache[date]}
 function fill(sel,label,vals,keep){sel.replaceChildren(new Option(label,''));vals.forEach(v=>sel.add(new Option(v,v)));sel.value=vals.includes(keep)?keep:''}
 function match(r){const q=st.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return (!st.pet||(r.pet&st.pet))&&(!st.cat||r.cat===st.cat)&&(!st.brand||r.brand===st.brand)&&q.every(w=>r.hay.includes(w))&&
@@ -129,7 +133,7 @@ function pick(r){st.sel=r.i;st.view='products';st.q=r.sku||r.title;$('q').value=
 /* ---------- charts ---------- */
 const esc=s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const css=n=>getComputedStyle(document.documentElement).getPropertyValue(n).trim();
-const CATS=['Dry food','Wet food','Treats','Toys','Accessories','Supplies','Care products'],INK={'--s3':'#0b0b0b','--s4':'#0b0b0b','--s5':'#0b0b0b'};
+const CATS=SC.cats,INK={'--s3':'#0b0b0b','--s4':'#0b0b0b','--s5':'#0b0b0b'};
 const catVar=c=>{const i=CATS.indexOf(c);return i<0?'--other':'--s'+(i+1)};
 const catList=rows=>{const have=new Set(rows.map(r=>r.cat));return [...CATS.filter(c=>have.has(c)),...[...have].filter(c=>!CATS.includes(c)).sort()]};
 let live=[],pending=[];
@@ -154,8 +158,8 @@ function scatter(all){const ok=all.filter(r=>r.un>0);if(!ok.length)return el('di
     tooltip:{...b.o.tooltip,trigger:'item',formatter:p=>{const r=ok[p.data[2]];return tip(name(r),ptip(r))}},
     xAxis:{type:'value',name:'Stores with stock',nameLocation:'middle',nameGap:28,min:0,max:D.NS,...b.ax},yAxis:{type:'log',name:'Units in stores (each step is 10× more)',min:1,...b.ax,axisLine:{show:false},minorSplitLine:{show:false}},
     series:[{type:'scatter',data:ok.map((r,i)=>[r.st,r.un,i]),symbolSize:7,cursor:'pointer',itemStyle:{color:css('--s1'),opacity:.4},emphasis:{itemStyle:{opacity:1,borderColor:b.panel,borderWidth:2}}}]}},p=>pick(ok[p.data[2]]))}
-function hist(ok){if(!ok.length)return el('div','sub','Nothing to show for these filters.');const bins=[{l:'0',n:0}];for(let a=1;a<=D.NS;a+=5)bins.push({l:a+'–'+Math.min(a+4,D.NS),n:0});
-  ok.forEach(r=>bins[r.st===0?0:Math.ceil(r.st/5)].n++);
+function hist(ok){if(!ok.length)return el('div','sub','Nothing to show for these filters.');const W=Math.max(5,Math.ceil(D.NS/100)*5),bins=[{l:'0',n:0}];for(let a=1;a<=D.NS;a+=W)bins.push({l:a+'–'+Math.min(a+W-1,D.NS),n:0});
+  ok.forEach(r=>bins[r.st===0?0:Math.ceil(r.st/W)].n++);
   return chart(280,()=>{const b=base();return {...b.o,grid:{left:8,right:12,top:28,bottom:30,containLabel:true},
     tooltip:{...b.o.tooltip,trigger:'item',formatter:p=>tip(p.name==='0'?'In no store':'In '+p.name+' stores',[fmt(p.value)+' variations',(p.value/ok.length*100).toFixed(1)+'% of those shown'])},
     xAxis:{type:'category',data:bins.map(x=>x.l),name:'Number of stores holding the variation',nameLocation:'middle',nameGap:bins.length>12?46:28,...b.ax,axisLabel:{color:b.mu,fontSize:10,interval:0,rotate:bins.length>12?45:0}},
@@ -198,7 +202,7 @@ function drawOverview(){const rows=filtered(),ok=rows.filter(r=>r.st!=null);stoc
     rank([...ok].sort((a,b)=>b.st-a.st||b.un-a.un).slice(0,12).map(r=>({label:name(r),value:r.st,suffix:' / '+D.NS,tip:ptip(r),go:()=>pick(r)})))));
   g.append(card('Which variations have the most units in stock?','Total units across all stores.',
     rank([...ok].sort((a,b)=>b.un-a.un).slice(0,12).map(r=>({label:name(r),value:r.un,tip:ptip(r),go:()=>pick(r)})),{unit:'units'})));
-  g.append(card('How widely is the range distributed?','How many variations sit in 0 stores, 1–5 stores, and so on.',hist(ok)));
+  g.append(card('How widely is the range distributed?','How many variations sit in 0 stores, a few stores, or nearly all of them.',hist(ok)));
   g.append(card('Which categories hold the most stock?','Units in stores by category.',rank(group(ok,r=>r.cat,r=>r.un),{unit:'units',lw:110})));
   const bs=new Map();ok.forEach(r=>{const b=bs.get(r.brand)||{un:0,n:0,st:0};b.un+=r.un;b.n++;b.st+=r.st;bs.set(r.brand,b)});
   g.append(card('Which brands hold the most stock?','Top 12 brands by units. Click a bar to list that brand.',
@@ -206,7 +210,7 @@ function drawOverview(){const rows=filtered(),ok=rows.filter(r=>r.st!=null);stoc
   g.append(wide(card('Where is the money sitting?','Stock value at shelf price (units × price). Each block is a brand inside its category; a bigger block means more money on the shelves.',tree(ok))));
   g.append(wide(card('Which stores carry the most stock, and of what?','Top 12 of '+D.NS+' locations by units, split by category. Click a store to list what it stocks.',storeStack(ok))));
   const all=D.rows.filter(r=>{const p=st.pet;st.pet=0;const m=match(r);st.pet=p;return m});
-  g.append(card('How much do the dog and cat ranges overlap?','Variations listed under dogs only, under both, or under cats only.',split([['Dogs only',1,'--s1'],['Both',3,'--s3'],['Cats only',2,'--s2']].map(([label,b,color])=>({label,color,value:all.filter(r=>r.pet===b).length})))));
+  if(all.some(r=>r.pet&2))g.append(card('How much do the dog and cat ranges overlap?','Variations listed under dogs only, under both, or under cats only.',split([['Dogs only',1,'--s1'],['Both',3,'--s3'],['Cats only',2,'--s2']].map(([label,b,color])=>({label,color,value:all.filter(r=>r.pet===b).length})))));
   g.append(card('How is total stock changing day to day?','Units in stores for every full day loaded (all products, filters not applied).',
     (full=>full.length>1?trend(full):el('div','sub','This needs at least two days that cover the full range. Days with only part of the range (such as a single category) are left out here; use the Compare days tab for those.'))(META.snapshots.filter(s=>s.variations>=.5*Math.max(...META.snapshots.map(t=>t.variations))))));
   const sb=el('div');g.append(card('What is selling best?','Estimated from the drop in store stock between two days.',sb));
@@ -239,7 +243,7 @@ function side(){const s=el('aside','card pad side');
   const r=st.sel==null?null:D.rows[st.sel];
   if(!r){s.append(el('h2','','Stock by store'),el('div','sub','Select a row to see how many units each store holds.'));return s}
   s.append(el('h2','',r.title),el('div','sub',[r.vr,r.brand,r.sku&&'SKU '+r.sku,r.price!=null&&'€'+r.price.toFixed(2)].filter(Boolean).join(' · ')));
-  if(/^https:\/\//.test(r.url)){const a=el('a','','Open on kika.lt');a.href=r.url;a.target='_blank';a.rel='noopener';s.append(a)}
+  if(/^https:\/\//.test(r.url)){const a=el('a','','Open on '+SC.host);a.href=r.url;a.target='_blank';a.rel='noopener';s.append(a)}
   if(!r.q){s.append(el('div','note','Stock was not collected for this variation on this day.'));return s}
   s.append(el('div','',r.st+' of '+D.NS+' stores · '+fmt(r.un)+' units'));
   const p=[];for(let j=0;j<r.q.length;j+=2)p.push({label:D.S[r.q[j]][0],title:D.S[r.q[j]][0]+' — '+D.S[r.q[j]][1],value:r.q[j+1]});p.sort((x,y)=>y.value-x.value);
@@ -288,15 +292,15 @@ async function drawSales(){const v=$('view');
   const w=el('div');w.style.cssText='display:flex;flex-direction:column;gap:16px';w.append(bar,g,c);v.replaceChildren(w);mount()}
 
 /* ---------- Add data ---------- */
-const FORMAT=[['date','Required','Day of the stock count, as YYYY-MM-DD.','2026-11-20'],['product','Required','Product name.','Tauro Pro Line bowl for water'],['variant_id','Required','Unique ID of the variation. It links the same variation across days.','45257197387945'],['store','Required column','Store name. One row per store that holds the variation. Leave blank when no store holds it.','KIKA Akropolis Vilnius'],['units_in_stock','Required column','Units in that store, as a whole number. 0 with a blank store means "in no store". Blank means "not collected".','4'],
- ['pet','Optional','dog, cat or dog+cat.','dog'],['variation','Optional','Size, colour or other variation name.','grey, 2 l'],['brand','Optional','Brand name.','Tauro Pro Line'],['category','Optional','Product category.','Supplies'],['sku','Optional','Product code.','TPL47216'],['price','Optional','Shelf price in euros. Needed for stock value and sales value.','12.99'],['buyable_online','Optional','yes or no.','yes'],['url','Optional','Link to the product page.','https://www.kika.lt/products/…'],['store_address','Optional','Store address.','Ozo g. 25, Vilnius']];
+const FORMAT=[['date','Required','Day of the stock count, as YYYY-MM-DD.','2026-11-20'],['product','Required','Product name.','Tauro Pro Line bowl for water'],['variant_id','Required','Unique ID of the variation. It links the same variation across days.','45257197387945'],['store','Required column','Store name. One row per store that holds the variation. Leave blank when no store holds it.','Fressnapf XXL Dresden'],['units_in_stock','Required column','Units in that store, as a whole number. 0 with a blank store means "in no store". Blank means "not collected".','4'],
+ ['pet','Optional','dog, cat or dog+cat.','dog'],['variation','Optional','Size, colour or other variation name.','grey, 2 l'],['brand','Optional','Brand name.','Tauro Pro Line'],['category','Optional','Product category.','Supplies'],['sku','Optional','Product code.','TPL47216'],['price','Optional','Shelf price in euros. Needed for stock value and sales value.','12.99'],['buyable_online','Optional','yes or no.','yes'],['url','Optional','Link to the product page.','https://www.fressnapf.de/p/…'],['store_address','Optional','Store address.','Gompitzer Höhe 9, 01156 Dresden']];
 function drawAdd(){tiles([]);note('');const w=el('div','grid');
   const up=el('div','card pad');up.append(el('h2','','Add a day of data'),el('div','sub','Choose the CSV file for one day. It is checked against the format, saved in the dashboard\'s uploads folder, and the charts update straight away. A file with the same name replaces the earlier one.'));
-  if(STATIC){up.replaceChildren(el('h2','','Add a day of data'),el('div','note','This hosted copy is read-only, so files cannot be uploaded here. To add a day: put the CSV in the uploads folder of the project, run "python3 build_static.py", and push to GitHub. The site updates by itself a minute later. Uploading from this page works when the dashboard is run with "python3 server.py".'))}
+  if(STATIC){up.replaceChildren(el('h2','','Add a day of data'),el('div','note','This hosted copy is read-only, so files cannot be uploaded here. To add a day: put the CSV in uploads/kika or uploads/fressnapf in the project, run "python3 build_static.py", and push to GitHub. The site updates by itself a minute later. Uploading from this page works when the dashboard is run with "python3 server.py".'))}
   const dr=el('div','drop'),inp=el('input'),bt=el('button','btn primary','Upload and save');inp.type='file';inp.accept='.csv,text/csv';inp.id='file';inp.setAttribute('aria-label','CSV file');dr.append(inp,bt);if(!STATIC)up.append(dr);
   const msg=el('div');up.append(msg);if(st.msg){msg.className=st.msg.ok?'ok':'err';msg.append(el('div','t',st.msg.text));(st.msg.details||[]).forEach(d=>msg.append(el('div','',d)))}
   bt.onclick=async()=>{const f=inp.files[0];if(!f){st.msg={ok:0,text:'Choose a CSV file first.'};return draw()}bt.disabled=true;bt.textContent='Uploading…';
-    try{const r=await fetch('/api/upload?name='+encodeURIComponent(f.name),{method:'POST',body:f}),j=await r.json();
+    try{const r=await fetch('/api/upload?site='+SITE+'&name='+encodeURIComponent(f.name),{method:'POST',body:f}),j=await r.json();
       if(!r.ok)st.msg={ok:0,text:j.error,details:j.details};else{st.msg={ok:1,text:(j.replaced?'Replaced ':'Saved ')+j.saved+': '+fmt(j.rows)+' rows, '+fmt(j.variations)+' variations, day '+j.dates.join(', ')+'.'};Object.keys(cache).forEach(k=>delete cache[k]);await refresh(j.dates[j.dates.length-1])}}
     catch(e){st.msg={ok:0,text:'The upload did not reach the dashboard. Check that it is still running, then try again.'}}draw()};
   up.append(el('h2','','Files loaded'));const tb=el('table'),b=el('tbody'),h=el('tr');['File','Day','Rows','Size'].forEach((x,i)=>h.append(el('th',i>1?'n':'',x)));const th=el('thead');th.append(h);tb.append(th,b);
@@ -308,7 +312,7 @@ function drawAdd(){tiles([]);note('');const w=el('div','grid');
   FORMAT.forEach(r=>{const tr=el('tr'),c=el('td');c.append(el('code','',r[0]));const p=el('td');p.append(el('span','pill'+(r[1]==='Optional'?' w':''),r[1]));tr.append(c,p,el('td','',r[2]),el('td','v',r[3]));fb.append(tr)});
   const fs=el('div','scroll');fs.append(ft);fm.append(fs,el('h2','','Example file'),el('div','sub','Example values, to show the layout: a variation in two stores, one in no store, and one that was not collected.'));
   const pre=el('pre');fm.append(pre);fetch('sample.csv').then(r=>r.text()).then(t=>pre.textContent=t);
-  const a=el('a','','Download this example as a CSV file');a.href='sample.csv';a.setAttribute('download','kika_sample.csv');fm.append(a);
+  const a=el('a','','Download this example as a CSV file');a.href='sample.csv';a.setAttribute('download','stock_sample.csv');fm.append(a);
   w.append(up,fm);$('view').replaceChildren(w)}
 
 /* ---------- shell ---------- */
@@ -321,7 +325,7 @@ async function setDate(d){st.date=d;D=await load(d);st.sel=null;st.store=null;st
   fill($('cat'),'All categories',[...new Set(D.rows.map(r=>r.cat))].sort(),st.cat);st.cat=$('cat').value;
   fill($('brand'),'All brands',[...new Set(D.rows.map(r=>r.brand))].sort((a,b)=>a.localeCompare(b)),st.brand);st.brand=$('brand').value;
   $('sub').textContent='Snapshot of '+d+' · '+D.NS+' locations · '+META.snapshots.length+' day'+(META.snapshots.length===1?'':'s')+' loaded'}
-async function refresh(want){META=await api('/api/snapshots','data/snapshots.json');const ds=META.snapshots.map(s=>s.date),sel=$('date');sel.replaceChildren();ds.forEach(d=>sel.add(new Option('Day: '+d,d)));
+async function refresh(want){META=await api('/api/snapshots?site='+SITE,'data/'+SITE+'/snapshots.json');const ds=META.snapshots.map(s=>s.date),sel=$('date');sel.replaceChildren();ds.forEach(d=>sel.add(new Option('Day: '+d,d)));
   if(!ds.length){D=null;$('sub').textContent='No data loaded';return}const d=ds.includes(want)?want:ds[ds.length-1];sel.value=d;await setDate(d)}
 $('tabs').onclick=e=>{const b=e.target.closest('button');if(b){st.view=b.dataset.v;st.msg=null;draw()}};
 $('pet').onclick=e=>{const b=e.target.closest('button');if(b){st.pet=+b.dataset.p;st.page=0;draw()}};
@@ -329,6 +333,8 @@ $('date').onchange=async e=>{await setDate(e.target.value);draw()};
 let tm;$('q').oninput=e=>{clearTimeout(tm);tm=setTimeout(()=>{st.q=e.target.value;st.page=0;draw()},150)};
 ['cat','brand','cover'].forEach(k=>$(k).onchange=e=>{st[k]=e.target.value;st.page=0;draw()});
 if(['overview','products','stores','sales','add'].includes(location.hash.slice(1)))st.view=location.hash.slice(1);
+document.title=SC.name+' Store Stock';$('h1').textContent=SC.name+' store stock';$('pet').hidden=!SC.pets;
+Object.entries(SITES).forEach(([k,v])=>{const b=el('button','',v.name+' · '+v.where);b.setAttribute('aria-pressed',k===SITE);b.onclick=()=>{if(k!==SITE)location.href=location.pathname+'?site='+k+'#'+st.view};$('site').append(b)});
 refresh().then(draw).catch(()=>{$('view').replaceChildren(el('div','err','The dashboard could not load its data. Start it with "python3 server.py" and open http://localhost:8765.'))});
 </script>
 </body>

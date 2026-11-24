@@ -1,12 +1,20 @@
-"""Local Kika stock dashboard. Run:  python3 server.py   then open http://localhost:8765
-Uploaded CSV files are saved in the uploads/ folder next to this file; every CSV in that folder is shown."""
+"""Local store stock dashboard (Kika, Fressnapf). Run:  python3 server.py   then open http://localhost:8765
+Uploaded CSV files are saved in uploads/<retailer>/ next to this file; every CSV in that folder is shown."""
 import csv, io, json, os, re, sys
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-UP = os.path.join(HERE, "uploads")
-os.makedirs(UP, exist_ok=True)
+SITES = ["kika", "fressnapf"]
+
+
+def folder(site):
+    """Upload folder of one retailer (unknown names fall back to the first)."""
+    p = os.path.join(HERE, "uploads", site if site in SITES else SITES[0])
+    os.makedirs(p, exist_ok=True)
+    return p
+
+
 PORT = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
 MAX = 300 * 1024 * 1024
 REQUIRED = ["date", "product", "variant_id", "store", "units_in_stock"]
@@ -81,28 +89,29 @@ def parse(text, filename):
     return out, errs, n
 
 
-CACHE = {}  # filename -> (mtime, parsed, rows)
+CACHE = {}  # file path -> (mtime, parsed, rows)
 
 
-def load_all():
-    files = sorted(f for f in os.listdir(UP) if f.lower().endswith(".csv"))
-    for f in list(CACHE):
-        if f not in files:
-            del CACHE[f]
+def load_all(site):
+    up = folder(site)
+    files = sorted(f for f in os.listdir(up) if f.lower().endswith(".csv"))
+    for p in list(CACHE):
+        if os.path.dirname(p) == up and os.path.basename(p) not in files:
+            del CACHE[p]
     for f in files:
-        p = os.path.join(UP, f)
+        p = os.path.join(up, f)
         m = os.path.getmtime(p)
-        if f not in CACHE or CACHE[f][0] != m:
+        if p not in CACHE or CACHE[p][0] != m:
             with open(p, encoding="utf-8-sig", newline="") as fh:
                 d, _, n = parse(fh.read(), f)
-            CACHE[f] = (m, d, n)
-    return files
+            CACHE[p] = (m, d, n)
+    return [os.path.join(up, f) for f in files]
 
 
-def merged(date):
+def merged(site, date):
     V, S = {}, {}
-    for f in load_all():
-        d = CACHE[f][1].get(date)
+    for p in load_all(site):
+        d = CACHE[p][1].get(date)
         if not d:
             continue
         S.update(d["s"])
@@ -117,21 +126,21 @@ def merged(date):
     return V, S
 
 
-def summary():
-    files = load_all()
-    dates = sorted({d for f in files for d in CACHE[f][1]})
+def summary(site):
+    files = load_all(site)
+    dates = sorted({d for p in files for d in CACHE[p][1]})
     snaps = []
     for date in dates:
-        V, S = merged(date)
+        V, S = merged(site, date)
         ok = [r for r in V.values() if r["ok"]]
         snaps.append({"date": date, "variations": len(V), "collected": len(ok), "stores": len(S),
                       "units": sum(sum(r["q"].values()) for r in ok), "stocked": sum(1 for r in ok if r["q"])})
-    return {"snapshots": snaps, "files": [{"name": f, "size": os.path.getsize(os.path.join(UP, f)), "rows": CACHE[f][2],
-                                           "dates": sorted(CACHE[f][1])} for f in files], "folder": UP}
+    return {"snapshots": snaps, "files": [{"name": os.path.basename(p), "size": os.path.getsize(p), "rows": CACHE[p][2],
+                                           "dates": sorted(CACHE[p][1])} for p in files], "folder": folder(site)}
 
 
-def dataset(date):
-    V, S = merged(date)
+def dataset(site, date):
+    V, S = merged(site, date)
     names = sorted(S)
     ix = {n: i for i, n in enumerate(names)}
     rows = [[vid, r["t"], r["vr"], r["b"], r["c"], r["sku"], r["p"], r["pet"], r["buy"], r["url"],
@@ -155,6 +164,7 @@ class H(BaseHTTPRequestHandler):
     def do_GET(self):
         u = urlparse(self.path)
         q = parse_qs(u.query)
+        site = q.get("site", [""])[0]
         if u.path in ("/", "/index.html"):
             with open(os.path.join(HERE, "index.html"), "rb") as f:
                 return self.send(200, f.read(), "text/html; charset=utf-8")
@@ -162,20 +172,21 @@ class H(BaseHTTPRequestHandler):
             with open(os.path.join(HERE, "echarts.min.js"), "rb") as f:
                 return self.send(200, f.read(), "application/javascript; charset=utf-8")
         if u.path == "/api/snapshots":
-            return self.send(200, summary())
+            return self.send(200, summary(site))
         if u.path == "/api/data":
-            return self.send(200, dataset(q.get("date", [""])[0]))
+            return self.send(200, dataset(site, q.get("date", [""])[0]))
         if u.path == "/sample.csv":
             return self.send(200, SAMPLE, "text/csv; charset=utf-8")
         if u.path == "/api/sample.csv":
-            return self.send(200, SAMPLE, "text/csv; charset=utf-8", {"Content-Disposition": 'attachment; filename="kika_sample.csv"'})
+            return self.send(200, SAMPLE, "text/csv; charset=utf-8", {"Content-Disposition": 'attachment; filename="stock_sample.csv"'})
         self.send(404, {"error": "Not found"})
 
     def do_POST(self):
         u = urlparse(self.path)
         if u.path != "/api/upload":
             return self.send(404, {"error": "Not found"})
-        name = os.path.basename(parse_qs(u.query).get("name", ["upload.csv"])[0])
+        q = parse_qs(u.query)
+        name = os.path.basename(q.get("name", ["upload.csv"])[0])
         name = re.sub(r"[^A-Za-z0-9._ -]", "_", name).strip(" .") or "upload.csv"
         if not name.lower().endswith(".csv"):
             return self.send(400, {"error": "Only .csv files can be added."})
@@ -190,7 +201,7 @@ class H(BaseHTTPRequestHandler):
         d, errs, n = parse(text, name)
         if errs:
             return self.send(400, {"error": "The file was not saved because it does not match the format.", "details": errs})
-        path = os.path.join(UP, name)
+        path = os.path.join(folder(q.get("site", [""])[0]), name)
         replaced = os.path.exists(path)
         with open(path + ".part", "wb") as f:
             f.write(raw)
@@ -203,5 +214,5 @@ class H(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
-    print("Kika dashboard: http://localhost:%d   (uploads folder: %s)" % (PORT, UP), flush=True)
+    print("Store stock dashboard: http://localhost:%d   (uploads folder: %s)" % (PORT, os.path.join(HERE, "uploads")), flush=True)
     ThreadingHTTPServer(("127.0.0.1", PORT), H).serve_forever()
