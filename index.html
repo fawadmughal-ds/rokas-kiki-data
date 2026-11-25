@@ -108,7 +108,46 @@ async function api(p,alt){if(!STATIC){try{const r=await fetch(p);if(r.ok&&(r.hea
 function shape(d){const S=d.stores;const rows=d.rows.map((r,i)=>{const q=r[10];let n=null,un=null;if(q){n=q.length/2;un=0;for(let j=1;j<q.length;j+=2)un+=q[j]}
   return {i,id:r[0],title:r[1],vr:r[2],brand:r[3],cat:r[4],sku:r[5],price:r[6],pet:r[7],buy:r[8],url:r[9],q,st:n,un,hay:(r[1]+' '+r[2]+' '+r[3]+' '+r[5]).toLowerCase()}});
   return {date:d.date,S,NS:S.length,rows,byId:new Map(rows.map(r=>[r.id,r]))}}
-async function load(date){if(!cache[date])cache[date]=shape(await api('/api/data?site='+SITE+'&date='+encodeURIComponent(date),'data/'+SITE+'/'+encodeURIComponent(date)+'.json'));return cache[date]}
+/* ---------- files added in the browser (hosted copy) ---------- */
+const LOCAL={},REQUIRED=['date','product','variant_id','store','units_in_stock'],PETS={dog:1,dogs:1,cat:2,cats:2,'dog+cat':3,both:3,'dogs+cats':3};
+function idb(mode,fn){return new Promise((res,rej)=>{let o;try{o=indexedDB.open('stock-dash',1)}catch(e){return rej(e)}o.onupgradeneeded=()=>o.result.createObjectStore('days');o.onerror=()=>rej(o.error);
+  o.onsuccess=()=>{try{const tx=o.result.transaction('days',mode),rq=fn(tx.objectStore('days'));tx.oncomplete=()=>res(rq&&rq.result);tx.onerror=tx.onabort=()=>rej(tx.error)}catch(e){rej(e)}}})}
+async function localLoad(){try{((await idb('readonly',s=>s.getAll(IDBKeyRange.bound(SITE+'|',SITE+'|￿'))))||[]).forEach(x=>LOCAL[x.snap.date]=x)}catch(e){}}
+function csvRows(t,cb){let i=t.charCodeAt(0)===0xFEFF?1:0,row=[],f='';const n=t.length;
+  while(i<n){const c=t.charCodeAt(i);
+    if(c===34){let j=i+1;for(;;){const k=t.indexOf('"',j);if(k<0){f+=t.slice(j);j=n;break}f+=t.slice(j,k);if(t.charCodeAt(k+1)===34){f+='"';j=k+2}else{j=k+1;break}}i=j}
+    else if(c===44){row.push(f);f='';i++}
+    else if(c===10||c===13){row.push(f);f='';cb(row);row=[];if(c===13&&t.charCodeAt(i+1)===10)i++;i++}
+    else{let k=i+1;for(;k<n;k++){const h=t.charCodeAt(k);if(h===44||h===10||h===13||h===34)break}f+=t.slice(i,k);i=k}}
+  if(f!==''||row.length){row.push(f);cb(row)}}
+function parseLocal(text,filename){const out={},errs=[];let head=null,ix={},n=0,line=0;const low=filename.toLowerCase(),guess=(low.includes('dog')?1:0)|(low.includes('cat')?2:0);
+  csvRows(text,row=>{line++;
+    if(!head){head=row.map(h=>h.trim().toLowerCase());head.forEach((h,i)=>{if(!(h in ix))ix[h]=i});return}
+    if(errs.length&&errs[0].startsWith('Missing'))return;if(line===2){const miss=REQUIRED.filter(c=>!(c in ix));if(miss.length){errs.push('Missing column(s): '+miss.join(', ')+'. The first line must be the column names.');return}}
+    if(!row.some(c=>c.trim()))return;n++;const get=c=>{const i=ix[c];return i!=null&&i<row.length?row[i].trim():''};
+    const date=get('date'),vid=get('variant_id'),store=get('store'),units=get('units_in_stock');let bad=null;
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(date))bad="date must look like 2026-11-20 (found '"+date.slice(0,20)+"')";else if(!vid)bad='variant_id is empty';
+    else if(units&&!/^\d+$/.test(units))bad="units_in_stock must be a whole number or blank (found '"+units.slice(0,20)+"')";else if(store&&!units)bad='a row with a store needs units_in_stock';
+    if(bad){if(errs.length<8)errs.push('Line '+line+': '+bad);return}
+    const d=out[date]||(out[date]={v:new Map(),s:new Map()});let r=d.v.get(vid);const pet=PETS[get('pet').toLowerCase()];
+    if(!r){const p=parseFloat(get('price').replace(',','.')),buy=get('buyable_online').toLowerCase();
+      r={t:get('product'),vr:get('variation'),b:get('brand')||'Unknown',c:get('category')||'Other',sku:get('sku'),p:isNaN(p)?null:p,pet:pet??guess,buy:!buy?null:+['yes','y','1','true'].includes(buy),url:get('url'),ok:false,q:new Map()};d.v.set(vid,r)}
+    else r.pet|=pet??guess;
+    if(units){r.ok=true;if(store&&+units>0)r.q.set(store,+units)}
+    if(store&&!d.s.has(store))d.s.set(store,get('store_address'))});
+  if(!head)errs.push('The file is empty.');else if(!errs.length&&line===1){const miss=REQUIRED.filter(c=>!(c in ix));errs.push(miss.length?'Missing column(s): '+miss.join(', ')+'. The first line must be the column names.':'The file has column names but no data rows.')}
+  else if(n===0&&!errs.length)errs.push('The file has column names but no data rows.');
+  const days=Object.keys(out).sort().map(date=>{const d=out[date],names=[...d.s.keys()].sort(),at=new Map(names.map((x,i)=>[x,i]));let units=0,col=0,stocked=0;
+    const rows=[...d.v].map(([vid,r])=>{let q=null;if(r.ok){q=[];col++;if(r.q.size)stocked++;r.q.forEach((u,s)=>{q.push(at.get(s),u);units+=u})}return [vid,r.t,r.vr,r.b,r.c,r.sku,r.p,r.pet,r.buy,r.url,q]});
+    return {snap:{date,variations:rows.length,collected:col,stores:names.length,units,stocked},data:{date,stores:names.map(x=>[x,d.s.get(x)]),rows}}});
+  return {days,errs,n}}
+async function addLocal(file){const text=await file.text(),p=parseLocal(text,file.name);if(p.errs.length)return {ok:0,text:'The file was not added because it does not match the format.',details:p.errs};
+  let kept=true;for(const d of p.days){const rec={name:file.name,size:file.size,rows:p.n,snap:d.snap,data:d.data};LOCAL[d.snap.date]=rec;try{await idb('readwrite',s=>s.put(rec,SITE+'|'+d.snap.date))}catch(e){kept=false}}
+  return {ok:1,dates:p.days.map(d=>d.snap.date),text:'Added '+file.name+': '+fmt(p.n)+' rows, '+fmt(p.days.reduce((a,d)=>a+d.snap.variations,0))+' variations, day '+p.days.map(d=>d.snap.date).join(', ')+'.'+(kept?'':' This browser would not store it, so it stays only until the page is closed.')}}
+async function dropLocal(date){delete LOCAL[date];delete cache[date];try{await idb('readwrite',s=>s.delete(SITE+'|'+date))}catch(e){}}
+function mergeLocal(){const m=new Map(META.snapshots.map(s=>[s.date,s]));Object.values(LOCAL).forEach(x=>m.set(x.snap.date,x.snap));META.snapshots=[...m.values()].sort((a,b)=>a.date<b.date?-1:1);
+  META.files=META.files.filter(f=>!f.local).concat(Object.values(LOCAL).map(x=>({name:x.name,size:x.size,rows:x.rows,dates:[x.snap.date],local:true})))}
+async function load(date){if(!cache[date])cache[date]=shape(STATIC&&LOCAL[date]?LOCAL[date].data:await api('/api/data?site='+SITE+'&date='+encodeURIComponent(date),'data/'+SITE+'/'+encodeURIComponent(date)+'.json'));return cache[date]}
 function fill(sel,label,vals,keep){sel.replaceChildren(new Option(label,''));vals.forEach(v=>sel.add(new Option(v,v)));sel.value=vals.includes(keep)?keep:''}
 function match(r){const q=st.q.trim().toLowerCase().split(/\s+/).filter(Boolean);
   return (!st.pet||(r.pet&st.pet))&&(!st.cat||r.cat===st.cat)&&(!st.brand||r.brand===st.brand)&&q.every(w=>r.hay.includes(w))&&
@@ -285,7 +324,7 @@ async function drawSales(){const v=$('view');
   g.append(card('Which categories sell the most?','Estimated units sold by category.',rank(group(sold,s=>s.r.cat,s=>s.sold),{color:'--s2',unit:'units sold (est.)',lw:110})));
   g.append(card('Which brands sell the most?','Top 12 brands by estimated units sold.',rank(group(sold,s=>s.r.brand,s=>s.sold).slice(0,12),{color:'--s2',unit:'units sold (est.)',lw:170})));
   const k=st.xsort;x.sort((a,b)=>b[k]-a[k]||b.sold-a.sold);
-  const tb=el('table'),b=el('tbody'),h=el('tr');[['#',1],['Product',0],['Brand',0],['Units before',1,'before'],['Units after',1,'after'],['Est. sold',1,'sold'],['Restocked',1,'up'],['Est. sales €',1,'rev']].forEach(c=>{const th=el('th',(c[1]?'n':'')+(c[2]?' s':''),c[0]+(c[2]===k?' ▼':''));if(c[2])th.onclick=()=>{st.xsort=c[2];draw()};h.append(th)});
+  const tb=el('table'),b=el('tbody'),h=el('tr');[['#',1],['Product',0],['Brand',0],['Units before',1,'before'],['Units after',1,'after'],['Est. sold',1,'sold'],['Units added',1,'up'],['Est. sales €',1,'rev']].forEach(c=>{const th=el('th',(c[1]?'n':'')+(c[2]?' s':''),c[0]+(c[2]===k?' ▼':''));if(c[2])th.onclick=()=>{st.xsort=c[2];draw()};h.append(th)});
   const th=el('thead');th.append(h);tb.append(th,b);
   x.slice(0,200).forEach((s,n)=>{const tr=el('tr');tr.append(el('td','n z',n+1),prodCell(s.r),el('td','',s.r.brand),el('td','n',fmt(s.before)),el('td','n',fmt(s.after)),el('td','n t',fmt(s.sold)),el('td','n',fmt(s.up)),el('td','n',fmt(s.rev)));b.append(tr)});
   const sc=el('div','scroll');sc.append(tb);const c=el('div','card');c.append(sc,Object.assign(el('div','foot'),{textContent:'Showing the top '+Math.min(200,x.length)+' of '+fmt(x.length)+' variations compared'}));
@@ -296,17 +335,18 @@ const FORMAT=[['date','Required','Day of the stock count, as YYYY-MM-DD.','2026-
  ['pet','Optional','dog, cat or dog+cat.','dog'],['variation','Optional','Size, colour or other variation name.','grey, 2 l'],['brand','Optional','Brand name.','Tauro Pro Line'],['category','Optional','Product category.','Supplies'],['sku','Optional','Product code.','TPL47216'],['price','Optional','Shelf price in euros. Needed for stock value and sales value.','12.99'],['buyable_online','Optional','yes or no.','yes'],['url','Optional','Link to the product page.','https://www.fressnapf.de/p/…'],['store_address','Optional','Store address.','Gompitzer Höhe 9, 01156 Dresden']];
 function drawAdd(){tiles([]);note('');const w=el('div','grid');
   const up=el('div','card pad');up.append(el('h2','','Add a day of data'),el('div','sub','Choose the CSV file for one day. It is checked against the format, saved in the dashboard\'s uploads folder, and the charts update straight away. A file with the same name replaces the earlier one.'));
-  if(STATIC){up.replaceChildren(el('h2','','Add a day of data'),el('div','note','This hosted copy is read-only, so files cannot be uploaded here. To add a day: put the CSV in uploads/kika or uploads/fressnapf in the project, run "python3 build_static.py", and push to GitHub. The site updates by itself a minute later. Uploading from this page works when the dashboard is run with "python3 server.py".'))}
-  const dr=el('div','drop'),inp=el('input'),bt=el('button','btn primary','Upload and save');inp.type='file';inp.accept='.csv,text/csv';inp.id='file';inp.setAttribute('aria-label','CSV file');dr.append(inp,bt);if(!STATIC)up.append(dr);
+  if(STATIC){up.replaceChildren(el('h2','','Add a day of data'),el('div','sub','Choose the CSV file for one day of '+SC.name+' data. It is checked against the format and the charts update straight away, including the Compare days tab. A day you add replaces the same day if it is already here.'),el('div','note','A file added here is kept in this browser only. It is still here when you come back, but other people and other devices do not see it. Days that everyone should see are added by the developer.'))}
+  const dr=el('div','drop'),inp=el('input'),bt=el('button','btn primary',STATIC?'Add to dashboard':'Upload and save');inp.type='file';inp.accept='.csv,text/csv';inp.id='file';inp.setAttribute('aria-label','CSV file');dr.append(inp,bt);up.append(dr);
   const msg=el('div');up.append(msg);if(st.msg){msg.className=st.msg.ok?'ok':'err';msg.append(el('div','t',st.msg.text));(st.msg.details||[]).forEach(d=>msg.append(el('div','',d)))}
-  bt.onclick=async()=>{const f=inp.files[0];if(!f){st.msg={ok:0,text:'Choose a CSV file first.'};return draw()}bt.disabled=true;bt.textContent='Uploading…';
+  bt.onclick=async()=>{const f=inp.files[0];if(!f){st.msg={ok:0,text:'Choose a CSV file first.'};return draw()}bt.disabled=true;bt.textContent=STATIC?'Reading the file…':'Uploading…';
+    if(STATIC){try{const j=await addLocal(f);st.msg=j;if(j.ok){Object.keys(cache).forEach(k=>delete cache[k]);await refresh(j.dates[j.dates.length-1])}}catch(e){st.msg={ok:0,text:'The file could not be read. Check that it is a CSV saved as UTF-8, then try again.'}}return draw()}
     try{const r=await fetch('/api/upload?site='+SITE+'&name='+encodeURIComponent(f.name),{method:'POST',body:f}),j=await r.json();
       if(!r.ok)st.msg={ok:0,text:j.error,details:j.details};else{st.msg={ok:1,text:(j.replaced?'Replaced ':'Saved ')+j.saved+': '+fmt(j.rows)+' rows, '+fmt(j.variations)+' variations, day '+j.dates.join(', ')+'.'};Object.keys(cache).forEach(k=>delete cache[k]);await refresh(j.dates[j.dates.length-1])}}
     catch(e){st.msg={ok:0,text:'The upload did not reach the dashboard. Check that it is still running, then try again.'}}draw()};
-  up.append(el('h2','','Files loaded'));const tb=el('table'),b=el('tbody'),h=el('tr');['File','Day','Rows','Size'].forEach((x,i)=>h.append(el('th',i>1?'n':'',x)));const th=el('thead');th.append(h);tb.append(th,b);
-  META.files.forEach(f=>{const tr=el('tr');tr.append(el('td','',f.name),el('td','',f.dates.join(', ')||'no valid rows'),el('td','n',fmt(f.rows)),el('td','n',(f.size/1e6).toFixed(1)+' MB'));b.append(tr)});
-  if(!META.files.length){const tr=el('tr'),td=el('td','empty','No files yet. Upload the first CSV above.');td.colSpan=4;tr.append(td);b.append(tr)}
-  const sc=el('div','scroll');sc.append(tb);up.append(sc,el('div','sub','Saved in: '+META.folder));
+  up.append(el('h2','','Files loaded'));const tb=el('table'),b=el('tbody'),h=el('tr');['File','Day','Rows','Size',''].forEach((x,i)=>h.append(el('th',i>1?'n':'',x)));const th=el('thead');th.append(h);tb.append(th,b);
+  META.files.forEach(f=>{const tr=el('tr');tr.append(el('td','',f.name),el('td','',f.dates.join(', ')||'no valid rows'),el('td','n',fmt(f.rows)),el('td','n',(f.size/1e6).toFixed(1)+' MB'));const x=el('td','n');if(f.local){const rm=el('button','btn','Remove');rm.setAttribute('aria-label','Remove '+f.name);rm.onclick=async()=>{await dropLocal(f.dates[0]);st.msg={ok:1,text:'Removed '+f.name+' from this browser.'};await refresh(st.date);draw()};tr.children[0].append(el('div','v','this browser only'));x.append(rm)}tr.append(x);b.append(tr)});
+  if(!META.files.length){const tr=el('tr'),td=el('td','empty','No files yet. Upload the first CSV above.');td.colSpan=5;tr.append(td);b.append(tr)}
+  const sc=el('div','scroll');sc.append(tb);up.append(sc);if(!STATIC)up.append(el('div','sub','Saved in: '+META.folder));
   const fm=el('div','card pad');fm.append(el('h2','','CSV format'),el('div','sub','The first line holds the column names. Each following line is one variation in one store. Columns can be in any order; extra columns are ignored. Save the file as UTF-8 with commas as separators.'));
   const ft=el('table'),fb=el('tbody'),fh=el('tr');['Column','','What it holds','Example'].forEach(x=>fh.append(el('th','',x)));const fth=el('thead');fth.append(fh);ft.append(fth,fb);
   FORMAT.forEach(r=>{const tr=el('tr'),c=el('td');c.append(el('code','',r[0]));const p=el('td');p.append(el('span','pill'+(r[1]==='Optional'?' w':''),r[1]));tr.append(c,p,el('td','',r[2]),el('td','v',r[3]));fb.append(tr)});
@@ -325,7 +365,7 @@ async function setDate(d){st.date=d;D=await load(d);st.sel=null;st.store=null;st
   fill($('cat'),'All categories',[...new Set(D.rows.map(r=>r.cat))].sort(),st.cat);st.cat=$('cat').value;
   fill($('brand'),'All brands',[...new Set(D.rows.map(r=>r.brand))].sort((a,b)=>a.localeCompare(b)),st.brand);st.brand=$('brand').value;
   $('sub').textContent='Snapshot of '+d+' · '+D.NS+' locations · '+META.snapshots.length+' day'+(META.snapshots.length===1?'':'s')+' loaded'}
-async function refresh(want){META=await api('/api/snapshots?site='+SITE,'data/'+SITE+'/snapshots.json');const ds=META.snapshots.map(s=>s.date),sel=$('date');sel.replaceChildren();ds.forEach(d=>sel.add(new Option('Day: '+d,d)));
+async function refresh(want){META=await api('/api/snapshots?site='+SITE,'data/'+SITE+'/snapshots.json');if(STATIC)mergeLocal();const ds=META.snapshots.map(s=>s.date),sel=$('date');sel.replaceChildren();ds.forEach(d=>sel.add(new Option('Day: '+d,d)));
   if(!ds.length){D=null;$('sub').textContent='No data loaded';return}const d=ds.includes(want)?want:ds[ds.length-1];sel.value=d;await setDate(d)}
 $('tabs').onclick=e=>{const b=e.target.closest('button');if(b){st.view=b.dataset.v;st.msg=null;draw()}};
 $('pet').onclick=e=>{const b=e.target.closest('button');if(b){st.pet=+b.dataset.p;st.page=0;draw()}};
@@ -335,7 +375,7 @@ let tm;$('q').oninput=e=>{clearTimeout(tm);tm=setTimeout(()=>{st.q=e.target.valu
 if(['overview','products','stores','sales','add'].includes(location.hash.slice(1)))st.view=location.hash.slice(1);
 document.title=SC.name+' Store Stock';$('h1').textContent=SC.name+' store stock';$('pet').hidden=!SC.pets;
 Object.entries(SITES).forEach(([k,v])=>{const b=el('button','',v.name+' · '+v.where);b.setAttribute('aria-pressed',k===SITE);b.onclick=()=>{if(k!==SITE)location.href=location.pathname+'?site='+k+'#'+st.view};$('site').append(b)});
-refresh().then(draw).catch(()=>{$('view').replaceChildren(el('div','err','The dashboard could not load its data. Start it with "python3 server.py" and open http://localhost:8765.'))});
+localLoad().then(()=>refresh()).then(draw).catch(()=>{$('view').replaceChildren(el('div','err','The dashboard could not load its data. Start it with "python3 server.py" and open http://localhost:8765.'))});
 </script>
 </body>
 </html>
